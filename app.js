@@ -47,7 +47,7 @@ const baseMaps = {
     "標準地圖 (OSM)": osm, 
     "等高線地形圖 (OpenTopo)": otm,
     "內政部臺灣通用電子地圖": emap,
-"經建三版 + 等高線": topo3_contour,
+	"經建三版": topo3,
     "OpenTopo + 經建三版": otm_topo3,
 };
 
