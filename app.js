@@ -1743,6 +1743,8 @@ let multiGpxStack = [];
 const multiColors = ['#FF0000', '#0000FF', '#FFA500', '#800080', '#FFD700', '#A52A2A', '#7FFF00', '#87CEFA', '#006400', '#FFC0CB'];
 
 document.getElementById("multiGpxInput").addEventListener("change", async (e) => {
+	
+	clearEverything(); 
     // 1. 重置狀態
     if (typeof window.resetGPS === 'function') window.resetGPS();
     if (typeof polyline !== 'undefined' && polyline) {
@@ -1751,16 +1753,14 @@ document.getElementById("multiGpxInput").addEventListener("change", async (e) =>
 
     const files = e.target.files;
     if (!files || files.length === 0) return;
-
-    // --- 【關鍵修正：假裝做一次單個匯入】 ---
-    // 先讀取第一個檔案，跑一次 parseGPX。
-    // 這會觸發您的初始化流程：建立 hoverMarker、啟動圖表監聽器、顯示圖表容器。
+    
     const firstFileText = await files[0].text();
     parseGPX(firstFileText); 
-
+    
     // 2. 準備多檔匯入
     document.getElementById("fileNameDisplay").textContent = `已匯入 ${files.length} 個 GPX 檔案`;
     clearAllMultiGPX(); 
+    
     let allBounds = L.latLngBounds([]);
 
     for (let i = 0; i < files.length; i++) {
