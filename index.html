@@ -90,14 +90,33 @@
 		    text-shadow: 1px 1px 0 white;
 		}
 		/* 專門給 iPhone 用的偽全螢幕樣式 */
-		.iphone-fullscreen {
-    		position: fixed !important;
-    		top: 0 !important;
-    		left: 0 !important;
-    		width: 100vw !important;
-    		height: 100vh !important;
-    		z-index: 9999 !important;
-		}
+.iphone-fullscreen {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    z-index: 9999 !important;
+    background: white;
+    display: flex !important;
+    flex-direction: column !important; /* 讓地圖跟 Bar 上下排列 */
+}
+
+/* 確保地圖在全螢幕時不要寫死 100vh，而是自動分配空間 */
+.iphone-fullscreen #map {
+    flex: 1 !important; /* 自動撐滿剩餘空間 */
+    height: auto !important;
+}
+
+/* 針對切換 Bar 的樣式優化 */
+.iphone-fullscreen #multiGpxContainer {
+    position: relative !important;
+    z-index: 10000 !important; /* 比容器更高 */
+    background: rgba(255, 255, 255, 0.9);
+    padding: 10px 0;
+    border-top: 1px solid #ccc;
+    display: block !important;
+}
 		
     .custom-file-upload { display: inline-block; padding: 8px 15px; cursor: pointer; background: #007bff; color: white; border-radius: 20px; font-size: 14px; font-weight: bold; }
     .map-compass { position: absolute; bottom: 10px; left: 5px; z-index: 1000; background: rgba(255, 255, 255, 0.9); border-radius: 50%; width: 65px; height: 65px; display: flex; align-items: center; justify-content: center; opacity: 0; visibility: hidden; transition: all 0.3s; border: 1px solid #ccc; }
