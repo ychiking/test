@@ -43,6 +43,7 @@ let isMouseDown = false;
 let mapTipTimer = null;
 let gpsMarker = null;
 let currentFocusId = null;
+let isMultiGpxMode = false;
 const backgroundTracksLayer = L.layerGroup().addTo(map);
 const routeSelect = document.getElementById("routeSelect");
 
@@ -1447,11 +1448,14 @@ function updateABUI() {
 function renderRouteInfo() {
   const f = trackPoints[0], l = trackPoints.at(-1), dur = l.timeUTC - f.timeUTC, { gain, loss } = calculateElevationGainFiltered();
   const currentRoute = allTracks[routeSelect.value || 0];
+  
   document.getElementById("routeSummary").innerHTML = `記錄日期：${f.timeLocal.substring(0, 10)}<br>路　　線：${currentRoute.name}<br>里　　程：${l.distance.toFixed(2)} km<br>花費時間：${Math.floor(dur/3600000)} 小時 ${Math.floor((dur%3600000)/60000)} 分鐘<br>最高海拔：${Math.max(...trackPoints.map(p=>p.ele)).toFixed(0)} m<br>最低海拔：${Math.min(...trackPoints.map(p=>p.ele)).toFixed(0)} m<br>總爬升數：${gain.toFixed(0)} m<br>總下降數：${loss.toFixed(0)} m`;
+  
   const wptListContainer = document.getElementById("wptList");
   const navShortcuts = document.getElementById("navShortcuts");
   let listHtml = "";
   let shortcutsHtml = "";
+
   if (currentRoute.waypoints && currentRoute.waypoints.length > 0) {
     listHtml += `<h4 id="anchorWpt" style="margin: 20px 0 10px 0;">📍 航點列表</h4>`;
     listHtml += `<table class="wpt-table"><thead><tr><th style="width:10%">#</th><th style="width:40%">日期與時間</th><th style="width:50%">航點名稱</th></tr></thead><tbody>`;
@@ -1462,11 +1466,27 @@ function renderRouteInfo() {
     shortcutsHtml += `<a href="#anchorWpt" class="shortcut-btn">📍 航點列表</a>`;
   }
 
-  listHtml += `
-    <h4 id="anchorPeak" style="margin: 30px 0 10px 0; font-size: 16px; color: #2c3e50; border-left: 5px solid #d35400; padding-left: 10px;">⛰️ 自動偵測：沿途山岳(200公尺內)</h4>
-    <div id="aiPeaksSection">
-        <div style="padding:20px; text-align:center; color:#666;">🔍 正在偵測中...</div>
-    </div>`;
+  // --- 關鍵修改：判斷是否為多檔案模式 ---
+  const isMultiMode = typeof multiGpxStack !== 'undefined' && multiGpxStack.length > 1;
+
+  listHtml += `<h4 id="anchorPeak" style="margin: 30px 0 10px 0; font-size: 16px; color: #2c3e50; border-left: 5px solid #d35400; padding-left: 10px;">⛰️ 沿途山岳(200公尺內)</h4>`;
+  
+  if (isMultiMode) {
+    // 多檔案模式：顯示手動按鈕，不自動執行
+    listHtml += `
+      <div id="aiPeaksSection">
+          <div style="padding:15px; text-align:center; background:#f8f9fa; border:1px dashed #ccc; border-radius:8px; margin:10px 0;">
+              <p style="margin-bottom:8px; color:#666; font-size:13px;">📍 多軌跡模式：已準備好偵測此路線山岳</p>
+              <button onclick="detectPeaksAlongRoute(true)" style="padding:6px 12px; background:#2c3e50; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:bold; font-size:13px;">🔍 偵測此路線山岳</button>
+          </div>
+      </div>`;
+  } else {
+    // 單檔案模式：維持原樣，顯示偵測中
+    listHtml += `
+      <div id="aiPeaksSection">
+          <div style="padding:20px; text-align:center; color:#666;">🔍 正在偵測中...</div>
+      </div>`;
+  }
   
   shortcutsHtml += `<a href="#anchorPeak" class="shortcut-btn">⛰️ 沿途山岳</a>`;
   shortcutsHtml += `<a href="javascript:location.reload();" class="shortcut-btn">✕ 關閉檔案</a>`;
@@ -1474,6 +1494,13 @@ function renderRouteInfo() {
   wptListContainer.innerHTML = listHtml;
   wptListContainer.style.display = "block";
   navShortcuts.innerHTML = shortcutsHtml;
+
+  // --- 修改處：如果是單檔才自動執行，多檔則不在此處呼叫 ---
+  if (!isMultiMode) {
+    if (typeof detectPeaksAlongRoute === 'function') {
+      detectPeaksAlongRoute();
+    }
+  }
 }
     
 
@@ -1481,22 +1508,80 @@ function renderRouteInfo() {
 function formatDate(d) { return d.toISOString().replace("T", " ").substring(0, 19); }
 
 // ================= 自動偵測經過山岳 (Overpass API) =================
-async function detectPeaksAlongRoute() {
+let peakAbortController = null; 
+
+/**
+ * 偵測經過山岳
+ * @param {boolean} isManual - 是否為手動點擊觸發
+ */
+async function detectPeaksAlongRoute(isManual = false) {
+    // 1. 如果有之前的偵測還在跑，直接取消它
+    if (peakAbortController) {
+        peakAbortController.abort();
+    }
+    
     const wptListContainer = document.getElementById("wptList");
+    if (!wptListContainer) return;
     wptListContainer.style.display = "block";
+
     let aiSection = document.getElementById("aiPeaksSection");
-    if (!aiSection) { aiSection = document.createElement("div"); aiSection.id = "aiPeaksSection"; wptListContainer.appendChild(aiSection); }
+    if (!aiSection) {
+        aiSection = document.createElement("div");
+        aiSection.id = "aiPeaksSection";
+        wptListContainer.appendChild(aiSection);
+    }
+
+    // --- 修改處：判斷是否需要顯示「手動偵測」按鈕 ---
+    const isMultiMode = typeof multiGpxStack !== 'undefined' && multiGpxStack.length > 1;
+    
+    // 如果是多檔模式，且「不是」手動點擊觸發的，就顯示按鈕並停止往下執行
+    if (isMultiMode && !isManual) {
+        aiSection.innerHTML = `
+            <div style="padding:20px; text-align:center; background:#f9f9f9; border:1px dashed #ccc; border-radius:8px; margin:10px 0;">
+                <p style="margin-bottom:10px; color:#666; font-size:14px;">📍 多軌跡模式：已準備好偵測此路線山岳</p>
+                <button onclick="detectPeaksAlongRoute(true)" 
+                        style="padding:8px 16px; background:#2c3e50; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">
+                    🔍 開始偵測山岳
+                </button>
+            </div>`;
+        return; 
+    }
+
+    // --- 以下為偵測流程 (單檔模式 或 多檔已點擊按鈕後) ---
+    
+    peakAbortController = new AbortController();
+    
+    // 初始化 UI 為載入中
     aiSection.innerHTML = `<div id="aiLoading" style="padding:20px; text-align:center; color:#666;">🔍 正在比對地圖資料，偵測沿途山岳(200公尺內)...</div>`;
+
+    if (typeof trackPoints === 'undefined' || !trackPoints || trackPoints.length === 0) {
+        aiSection.innerHTML = "";
+        return;
+    }
 
     const samplingRate = Math.max(1, Math.floor(trackPoints.length / 50));
     const sampledPoints = trackPoints.filter((_, i) => i % samplingRate === 0);
     let aroundSegments = sampledPoints.map(p => `node(around:200,${p.lat},${p.lon})[natural=peak];`).join("");
     const fullQuery = `[out:json][timeout:30];(${aroundSegments});out body;`;
 
+    const timeoutId = setTimeout(() => {
+        if (peakAbortController) peakAbortController.abort();
+    }, 15000);
+
     try {
-        const response = await fetch("https://overpass-api.de/api/interpreter", { method: "POST", body: "data=" + encodeURIComponent(fullQuery) });
+        const response = await fetch("https://overpass-api.de/api/interpreter", { 
+            method: "POST", 
+            body: "data=" + encodeURIComponent(fullQuery),
+            signal: peakAbortController.signal 
+        });
+        clearTimeout(timeoutId);
+
         const data = await response.json();
-        if (!data.elements || data.elements.length === 0) { aiSection.innerHTML = `<div style="padding:20px; color:#999; font-size:13px; text-align:center;">ℹ️ 沿途未偵測到額外的山峰標記。</div>`; return; }
+        
+        if (!data.elements || data.elements.length === 0) {
+            aiSection.innerHTML = `<div style="padding:20px; color:#999; font-size:13px; text-align:center;">ℹ️ 沿途未偵測到額外的山峰標記。</div>`;
+            return;
+        }
 
         const uniquePeaks = [];
         const seenNames = new Set();
@@ -1506,7 +1591,6 @@ async function detectPeaksAlongRoute() {
             if (!seenNames.has(name)) {
                 seenNames.add(name);
                 let minMeterDist = Infinity, bestIdx = 0;
-                // 使用 Haversine 公式計算最短距離(公尺)
                 trackPoints.forEach((tp, i) => {
                     const R = 6371000;
                     const dLat = (el.lat - tp.lat) * Math.PI / 180;
@@ -1519,9 +1603,21 @@ async function detectPeaksAlongRoute() {
             }
         });
         uniquePeaks.sort((a, b) => a.idx - b.idx);
-        renderPeakTable(uniquePeaks);
+        
+        if (typeof renderPeakTable === 'function') {
+            renderPeakTable(uniquePeaks);
+        }
+
     } catch (error) {
-        aiSection.innerHTML = `<div style="padding:20px; color:#721c24; background-color:#f8d7da; border:1px solid #f5c6cb; border-radius:8px; text-align:center; margin:10px 0;"><p style="margin-bottom:10px;">❌ 山岳偵測連線失敗</p><button onclick="detectPeaksAlongRoute()" style="padding:8px 16px; background:#d35400; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">🔄 重新偵測</button></div>`;
+        if (error.name === 'AbortError') {
+            console.log("偵測請求已更新/取消");
+        } else {
+            aiSection.innerHTML = `
+                <div style="padding:20px; color:#721c24; background-color:#f8d7da; border:1px solid #f5c6cb; border-radius:8px; text-align:center; margin:10px 0;">
+                    <p style="margin-bottom:10px;">❌ 山岳偵測連線失敗 (或網路逾時)</p>
+                    <button onclick="detectPeaksAlongRoute(true)" style="padding:8px 16px; background:#d35400; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">🔄 重新偵測</button>
+                </div>`;
+        }
     }
 }
 
@@ -1844,127 +1940,92 @@ document.getElementById("multiGpxInput").addEventListener("change", async (e) =>
 // 切換 Focus 的 GPX (核心需求：顯示該 GPX 的航點與列表)
 function switchMultiGpx(index) {
     const data = multiGpxStack[index];
-    
     if (!data) return;
     
-   
-    
     if (data.layer) {
-        map.fitBounds(data.layer.getBounds(), {
-            padding: [20, 20], 
-            maxZoom: 16       
-        });
+        map.fitBounds(data.layer.getBounds(), { padding: [20, 20], maxZoom: 16 });
     }
     
     window.currentMultiIndex = index;
-
-    // 1. 強制關閉地圖上所有開啟的 Popup
     map.closePopup();
 
-    // 2. 數據注入
-    allTracks = [{
-        name: data.name,
-        points: data.points,
-        waypoints: data.waypoints
-    }];
+    // 數據注入
+    allTracks = [{ name: data.name, points: data.points, waypoints: data.waypoints }];
     trackPoints = data.points; 
-    drawElevationChart();
 
-    // 3. 更新地圖標記 (起點、終點)
-    markers.forEach(m => map.removeLayer(m)); 
-    markers = [];
-    if (trackPoints.length > 0) {
-        const startIdx = 0;
-        const endIdx = trackPoints.length - 1;
-
-        // --- 起點 ---
-        const startMarker = L.marker([trackPoints[startIdx].lat, trackPoints[startIdx].lon], { 
-            icon: startIcon, 
-            zIndexOffset: 1000 
-        }).addTo(map);
-        
-        startMarker.on('click', (e) => {
-            L.DomEvent.stopPropagation(e);
-            showCustomPopup(startIdx, "起點"); 
-        });
-        markers.push(startMarker);
-
-        // --- 終點 ---
-        const endMarker = L.marker([trackPoints[endIdx].lat, trackPoints[endIdx].lon], { 
-            icon: endIcon, 
-            zIndexOffset: 1000 
-        }).addTo(map);
-        
-        endMarker.on('click', (e) => {
-            L.DomEvent.stopPropagation(e);
-            showCustomPopup(endIdx, "終點"); 
-        });
-        markers.push(endMarker);
+    // --- 修改處 1: 顯示展開收合按鈕並更新狀態 ---
+    const toggleBtn = document.getElementById("toggleChartBtn");
+    if (toggleBtn) {
+        toggleBtn.style.display = "block"; // 匯入後才顯示
+        toggleBtn.textContent = "收合高度表"; 
     }
 
-    // --- 關鍵修改：清空前一個 GPX 的航點標記 ---
-    if (typeof wptMarkers !== 'undefined') {
-        wptMarkers.forEach(m => map.removeLayer(m));
-    }
-    wptMarkers = []; // 重置全域陣列
-
-    // 4. 更新航點
-    data.waypoints.forEach(wpt => {
-        let minDist = Infinity;
-        let closestIdx = 0;
+ 		const aiSection = document.getElementById("aiPeaksSection");
+    if (aiSection) {
+        // 1. 先把原本可能在跑的請求取消掉
+        if (peakAbortController) {
+            peakAbortController.abort();
+        }
         
-        trackPoints.forEach((p, idx) => {
-            const d = L.latLng(wpt.lat, wpt.lon).distanceTo([p.lat, p.lon]);
-            if (d < minDist) {
-                minDist = d;
-                closestIdx = idx;
-            }
-        });
+        // 2. 直接清空區塊，不要寫「正在偵測中」，也不要呼叫 detectPeaksAlongRoute()
+        aiSection.innerHTML = `
+            <div style="padding:10px; text-align:center; color:#888; font-size:12px; border:1px dashed #ddd; border-radius:8px; margin:5px 0;">
+                ℹ️ 多檔案模式：自動偵測功能已停用
+            </div>`;
+    }
 
-        const marker = L.marker([wpt.lat, wpt.lon], { icon: wptIcon })
-            .addTo(map);
-            
-        marker.on('click', (e) => {
-            L.DomEvent.stopPropagation(e); 
-            showCustomPopup(closestIdx, wpt.name); 
-        });
-
-        wptMarkers.push(marker);
-    });
-
-    // 5. 介面渲染
-    document.getElementById("chartContainer").style.display = "block";
-    document.getElementById("wptList").style.display = "block";
-    document.getElementById("fileNameDisplay").textContent = data.name;
-
-    if (typeof renderRouteInfo === 'function') renderRouteInfo(); 
+    // 原有的地圖與 UI 渲染
     if (typeof drawElevationChart === 'function') {
         if (window.chart) window.chart.destroy(); 
         drawElevationChart(); 
     }
 
-    // 6. 更新按鈕狀態與線條粗細
+    markers.forEach(m => map.removeLayer(m)); 
+    markers = [];
+    if (trackPoints.length > 0) {
+        const startIdx = 0, endIdx = trackPoints.length - 1;
+        const startMarker = L.marker([trackPoints[startIdx].lat, trackPoints[startIdx].lon], { icon: startIcon, zIndexOffset: 1000 }).addTo(map);
+        startMarker.on('click', (e) => { L.DomEvent.stopPropagation(e); showCustomPopup(startIdx, "起點"); });
+        markers.push(startMarker);
+
+        const endMarker = L.marker([trackPoints[endIdx].lat, trackPoints[endIdx].lon], { icon: endIcon, zIndexOffset: 1000 }).addTo(map);
+        endMarker.on('click', (e) => { L.DomEvent.stopPropagation(e); showCustomPopup(endIdx, "終點"); });
+        markers.push(endMarker);
+    }
+
+    if (typeof wptMarkers !== 'undefined') { wptMarkers.forEach(m => map.removeLayer(m)); }
+    wptMarkers = []; 
+
+    data.waypoints.forEach(wpt => {
+        let minDist = Infinity, closestIdx = 0;
+        trackPoints.forEach((p, idx) => {
+            const d = L.latLng(wpt.lat, wpt.lon).distanceTo([p.lat, p.lon]);
+            if (d < minDist) { minDist = d; closestIdx = idx; }
+        });
+        const marker = L.marker([wpt.lat, wpt.lon], { icon: wptIcon }).addTo(map);
+        marker.on('click', (e) => { L.DomEvent.stopPropagation(e); showCustomPopup(closestIdx, wpt.name); });
+        wptMarkers.push(marker);
+    });
+
+    // 介面渲染
+    document.getElementById("chartContainer").style.display = "block"; // 切換時預設打開
+    document.getElementById("wptList").style.display = "block";
+    document.getElementById("fileNameDisplay").textContent = `已匯入 ${multiGpxStack.length} 個 GPX 檔案`;
+
+    if (typeof renderRouteInfo === 'function') renderRouteInfo(); 
+
+    // 按鈕與樣式更新
     multiGpxStack.forEach((item, i) => {
+        const btn = document.getElementById(`multi-btn-${i}`);
         if (i === index) {
-            item.layer.setStyle({ 
-                weight: 8, 
-                opacity: 1.0 
-            }).bringToFront(); 
-            
-            const btn = document.getElementById(`multi-btn-${i}`);
+            item.layer.setStyle({ weight: 8, opacity: 1.0 }).bringToFront(); 
             if (btn) btn.classList.add('active');
         } else {
-            item.layer.setStyle({ 
-                weight: 5, 
-                opacity: 0.6 
-            });
-            const btn = document.getElementById(`multi-btn-${i}`);
+            item.layer.setStyle({ weight: 5, opacity: 0.6 });
             if (btn) btn.classList.remove('active');
         }
     });
-    if (typeof hoverMarker !== 'undefined' && hoverMarker) {
-        hoverMarker.bringToFront();
-    }
+    if (typeof hoverMarker !== 'undefined' && hoverMarker) { hoverMarker.bringToFront(); }
 }
 
 function renderMultiGpxButtons() {
@@ -2079,3 +2140,24 @@ window.switchToTrack = function(id) {
     renderRouteInfo();
     renderTrackButtons();
 };
+
+function toggleElevationChart() {
+    const chartContainer = document.getElementById("chartContainer");
+    const btn = document.getElementById("toggleChartBtn");
+
+    if (chartContainer.style.display === "none") {
+        // 執行展開
+        chartContainer.style.display = "block";
+        btn.textContent = "收合高度表";
+        
+        // 關鍵：如果 Chart.js 在容器隱藏時繪製，寬度會縮成 0
+        // 展開後必須呼叫 resize() 讓圖表重新填滿容器
+        if (window.chart) {
+            window.chart.resize();
+        }
+    } else {
+        // 執行收合
+        chartContainer.style.display = "none";
+        btn.textContent = "展開高度表";
+    }
+}

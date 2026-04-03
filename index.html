@@ -22,6 +22,17 @@
     border-bottom: 1px solid #ddd; 
     display: none; /* 加入這一行 */
 }
+    #toggleChartBtn {
+            margin: 5px auto;
+            padding: 5px 15px;
+            background: #555;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            z-index: 1001; /* 確保在圖表上方 */
+        }
     #routeInfo { margin-top: 5px; padding: 12px 16px; background: #fafafa; border-top: 1px solid #ddd; font-size: 15px; line-height: 1.6; }
     .upload-row { display: flex; align-items: center; gap: 8px; }
     .subtitle { margin-top: 8px; font-size: 14px; color: #555; line-height: 1.4; }
@@ -183,7 +194,7 @@
     <span id="fileNameDisplay" style="font-weight:600; margin-left:5px;">尚未選擇檔案</span>
   </div>
   <div class="subtitle">
-    <strong>YCHiking-GPX 路線檢視工具 v260403</strong>
+    <strong>YCHiking-GPX 路線檢視工具 v260404</strong>
     <div id="navShortcuts" style="margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap;"></div>
     
     <div id="routeSelectContainer" style="display:none; margin-top: 10px;">
@@ -263,6 +274,7 @@
     </div>
 </div>
 
+<button id="toggleChartBtn" onclick="toggleElevationChart()" style="display: none;">展開/收合高度表</button>
 <div id="chartContainer"><canvas id="elevationChart"></canvas></div>
 <div id="routeInfo">
   <div id="routeSummary">尚未讀取資料</div>
