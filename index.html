@@ -90,32 +90,28 @@
 		    text-shadow: 1px 1px 0 white;
 		}
 .iphone-fullscreen {
-    position: fixed !important; /* 改用 fixed 確保固定在螢幕 */
+    position: fixed !important;
     top: 0 !important;
     left: 0 !important;
     width: 100vw !important;
     height: 100vh !important;
-    /* 必須大於頁面其他所有元素的 z-index */
-    z-index: 999999 !important; 
+    z-index: 9999 !important;
     background: white;
     display: flex !important;
-    flex-direction: column !important;
+    flex-direction: column !important; /* 地圖在上，按鈕在下 */
 }
 
-/* 確保全螢幕時，地圖本身填滿 */
 .iphone-fullscreen #map {
-    flex: 1 !important;
-    height: 100% !important;
+    flex: 1 !important; 
+    height: 100% !important; 
+    width: 100% !important;
 }
 
-/* 讓 GPX 切換列強制浮在地圖容器的最下方 */
+
 .iphone-fullscreen #multiGpxBtnBar {
-    display: flex !important;
-    position: relative !important;
-    z-index: 1000000 !important; /* 比容器更高 */
-    background: rgba(0, 0, 0, 0.9);
-    /* 避開 iPhone 底部 Search Bar 可能遮擋的區域 */
-    padding-bottom: 20px !important; 
+	  display: flex !important;
+	  z-index: 10001 !important;
+	  flex-shrink: 0 !important;
 }
 		
     .custom-file-upload { display: inline-block; padding: 8px 15px; cursor: pointer; background: #007bff; color: white; border-radius: 20px; font-size: 14px; font-weight: bold; }
