@@ -109,9 +109,19 @@
 
 
 .iphone-fullscreen #multiGpxBtnBar {
-	  display: flex !important;
-	  z-index: 10001 !important;
-	  flex-shrink: 0 !important;
+    display: flex !important;
+    z-index: 10001 !important;
+    flex-shrink: 0 !important;
+    
+    /* 關鍵：避開 iPhone 底部系統手勢區域 */
+    padding-bottom: calc(env(safe-area-inset-bottom) + 10px) !important; 
+    
+    /* 確保背景延伸到底部，視覺才不會斷層 */
+    background: rgba(0, 0, 0, 0.9) !important;
+    
+    /* 確保內容可以水平滑動而不受干擾 */
+    overflow-x: auto !important;
+    touch-action: pan-x !important; /* 強制只允許水平滑動 */
 }
 		
     .custom-file-upload { display: inline-block; padding: 8px 15px; cursor: pointer; background: #007bff; color: white; border-radius: 20px; font-size: 14px; font-weight: bold; }
