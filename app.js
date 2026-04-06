@@ -2228,7 +2228,7 @@ function switchMultiGpx(index) {
             item.layer.setStyle({ 
                 color: item.color, // 保持原始顏色
                 weight: 5, 
-                opacity: 0.2       // 變淡作為背景
+                opacity: 0.5       // 變淡作為背景
             });
             if (btn) btn.classList.remove('active');
         }
@@ -2268,7 +2268,6 @@ function switchMultiGpx(index) {
     document.getElementById("wptList").style.display = "block";
     
     // 如果是結合項，顯示稍微不同的文字提示
-    const displayMsg = data.isCombined ? `當前檢視：${data.name} (結合)` : `當前檢視：${data.name}`;
     document.getElementById("fileNameDisplay").textContent = displayMsg;
 
     // 4. 重置山岳偵測 (保持你原本的邏輯)
