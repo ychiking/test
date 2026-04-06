@@ -2308,6 +2308,9 @@ function renderMultiGpxButtons() {
     multiGpxStack.forEach((gpx, i) => {
         const btn = document.createElement('button');
         btn.className = 'gpx-file-btn';
+
+		btn.style.flexShrink = "0";     // 防止被擠扁
+    	btn.style.whiteSpace = "nowrap"; // 防止文字斷行
         btn.id = `multi-btn-${i}`;
         
         const maxLength = 40;
