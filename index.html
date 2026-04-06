@@ -136,7 +136,21 @@
 	  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 40px) !important;
 }
 		
-    .custom-file-upload { display: inline-block; padding: 8px 15px; cursor: pointer; background: #007bff; color: white; border-radius: 20px; font-size: 14px; font-weight: bold; }
+    .custom-file-upload {
+    display: inline-block;
+    padding: 8px 8px;
+    cursor: pointer;
+    background: #007bff;
+    color: white;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: bold;
+
+    width: 80px;            /* 設定您想要的固定寬度 */
+    text-align: center;     /* 讓文字置中 */
+    flex-shrink: 0;         /* 防止在 Flex 佈局中被擠壓 */
+    white-space: nowrap;    /* 防止文字換行 */
+}
     .map-compass { position: absolute; bottom: 10px; left: 5px; z-index: 1000; background: rgba(255, 255, 255, 0.9); border-radius: 50%; width: 65px; height: 65px; display: flex; align-items: center; justify-content: center; opacity: 0; visibility: hidden; transition: all 0.3s; border: 1px solid #ccc; }
     .map-compass.show { opacity: 1; visibility: visible; }
     .shortcut-btn { font-size: 12px; background: #f0f0f0; color: #555; padding: 5px 12px; border-radius: 15px; text-decoration: none; border: 1px solid #ddd; font-weight: bold; }
