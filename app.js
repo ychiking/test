@@ -2116,6 +2116,9 @@ document.getElementById("multiGpxInput").addEventListener("change", async (e) =>
     document.getElementById("fileNameDisplay").textContent = `已匯入 ${files.length} 個 GPX 檔案`;
     clearAllMultiGPX(); 
     
+    const hint = document.getElementById('importHint');
+    if (hint) hint.style.display = 'none';
+    
     let allBounds = L.latLngBounds([]);
 
     for (let i = 0; i < files.length; i++) {
@@ -2308,9 +2311,6 @@ function renderMultiGpxButtons() {
     multiGpxStack.forEach((gpx, i) => {
         const btn = document.createElement('button');
         btn.className = 'gpx-file-btn';
-
-		btn.style.flexShrink = "0";     // 防止被擠扁
-    	btn.style.whiteSpace = "nowrap"; // 防止文字斷行
         btn.id = `multi-btn-${i}`;
         
         const maxLength = 40;
