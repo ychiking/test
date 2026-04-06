@@ -731,7 +731,7 @@ function getBearingInfo(lat1, lon1, lat2, lon2) {
 }
 
 // ================= 地圖載入與連動 =================
-function loadRoute(index) {
+function loadRoute(index, customColor = null) { // 1. 新增參數 customColor
     map.closePopup();
     if (typeof window.clearABSettings === 'function') window.clearABSettings();
 
@@ -746,25 +746,36 @@ function loadRoute(index) {
     trackPoints = sel.points;
 
     // --- 核心修正：處理多檔案模式圖層顯示 ---
-    // 檢查目前是否處於多檔案模式
+    let finalColor = customColor || "red"; 
+
     if (typeof multiGpxStack !== 'undefined' && multiGpxStack.length > 0) {
+        const currentStackItem = multiGpxStack[window.currentMultiIndex];
+        if (currentStackItem && currentStackItem.color) {
+            finalColor = currentStackItem.color;
+        }
+
         multiGpxStack.forEach((item, i) => {
             if (i === window.currentMultiIndex) {
-                // 如果選中的是「子路線」(index < 最後一個)，隱藏該檔案原始的粗線，避免重疊
-                // 如果選中的是「結合版/檔名」(index === 最後一個)，則顯示原始粗線
-                if (index < allTracks.length - 1) {
+                // 【關鍵修正】：
+                // 只有當「總路線數 > 1」且「目前選的不是子路線」時，才顯示原始粗線。
+                // 如果用戶正在點選特定的子路線（index < allTracks.length），
+                // 應該隱藏原始粗線 item.layer，改由下方的 polyline (細線) 繪製該段顏色。
+                
+                if (allTracks.length > 1) {
+                    // 如果這份 GPX 有多條路線，我們永遠隱藏原始粗線，由 polyline 負責顯示目前選的那一段
                     item.layer.setStyle({ opacity: 0, weight: 0 });
                 } else {
-                    item.layer.setStyle({ opacity: 1, weight: 8 }).bringToFront();
+                    // 如果這份 GPX 只有一條線，則正常顯示
+                    item.layer.setStyle({ color: finalColor, opacity: 1, weight: 8 }).bringToFront();
                 }
             } else {
-                // 其他未選中的檔案保持淡化背景色
-                item.layer.setStyle({ opacity: 0.6, weight: 5 });
+                // 其他未選中的檔案保持淡化
+                item.layer.setStyle({ opacity: 0.5, weight: 5 });
             }
         });
     }
 
-    // 清除舊的紅色細線
+    // 清除舊的線條
     if (polyline) map.removeLayer(polyline);
     markers.forEach(m => map.removeLayer(m));
     wptMarkers.forEach(m => map.removeLayer(m));
@@ -773,19 +784,18 @@ function loadRoute(index) {
     markers = [];
     wptMarkers = [];
 
-    // 畫出目前的紅色細線 (子路線)
+    // --- 關鍵修改：使用 finalColor 替代寫死的 "red" ---
     polyline = L.polyline(trackPoints.map(p => [p.lat, p.lon]), {
-        color: "red",
+        color: finalColor, 
         weight: 6,
         opacity: 0.8
     }).addTo(map);
 
-    // 縮放到該路線範圍
+    // ... 以下縮放、起終點、航點繪製邏輯保持不變 ...
     if (polyline.getBounds().isValid()) {
         map.fitBounds(polyline.getBounds(), { padding: [40, 40] });
     }
 
-    // 繪製起點終點
     const mStart = L.marker([trackPoints[0].lat, trackPoints[0].lon], { icon: startIcon }).addTo(map);
     mStart.on('click', (e) => { L.DomEvent.stopPropagation(e); showCustomPopup(0, "起點"); });
     
@@ -794,7 +804,6 @@ function loadRoute(index) {
     
     markers.push(mStart, mEnd);
 
-    // 繪製航點 (略過邏輯，保持您原有的 wptMarkers 處理...)
     sel.waypoints.forEach(w => {
         let minD = Infinity, tIdx = 0;
         trackPoints.forEach((tp, i) => {
@@ -2196,51 +2205,73 @@ function switchMultiGpx(index) {
     const data = multiGpxStack[index];
     if (!data) return;
     
-    // 1. 設定全域索引，讓 loadRoute 知道現在在處理哪個檔案
     window.currentMultiIndex = index;
     map.closePopup();
 
-    // 2. 處理多檔案按鈕與地圖原始圖層的視覺高亮
+    // 1. 處理所有圖層的「原始顏色」與「半透明」狀態
     multiGpxStack.forEach((item, i) => {
         const btn = document.getElementById(`multi-btn-${i}`);
         if (i === index) {
-            // 選中的檔案：加粗、不透明、置頂
-            item.layer.setStyle({ weight: 8, opacity: 1.0 }).bringToFront(); 
+            // --- 選中的檔案 ---
+            // 這裡不要寫死 'red'，而是使用 item.color (原始顏色)
+            // 如果你想強調選中項，可以把線條加粗
+            item.layer.setStyle({ 
+                color: item.color, // 保持原始顏色
+                weight: 8,         // 加粗
+                opacity: 1.0       // 全顯
+            }).bringToFront(); 
+            
             if (btn) btn.classList.add('active');
-            // 地圖縮放至此檔案範圍
             map.fitBounds(item.layer.getBounds(), { padding: [20, 20], maxZoom: 16 });
         } else {
-            // 未選中的檔案：變細、半透明
-            item.layer.setStyle({ weight: 5, opacity: 0.3 });
+            // --- 未選中的檔案 ---
+            item.layer.setStyle({ 
+                color: item.color, // 保持原始顏色
+                weight: 5, 
+                opacity: 0.2       // 變淡作為背景
+            });
             if (btn) btn.classList.remove('active');
         }
     });
 
-    // 3. 關鍵：重新解析該檔案內容
-    // parseGPX 內部最後會呼叫 loadRoute()
-    // loadRoute 會幫你處理：紅色細線、起終點標記、24個航點標記、高度表、路況資訊
+    // 2. 重新解析數據 (為了更新高度表與航點)
     if (data.content) {
         const pureFileName = data.name.replace(/\.[^/.]+$/, "");
         parseGPX(data.content, pureFileName);
+        
+        // --- 關鍵修正：修正 parseGPX/loadRoute 強制變紅的問題 ---
+        // 因為 parseGPX 最終會跑 loadRoute 並產生一條新的紅線 (activeRouteLayer)
+        // 我們需要在這之後立刻把那條紅線的顏色也改回原始顏色
+        setTimeout(() => {
+            if (window.activeRouteLayer) {
+                activeRouteLayer.setStyle({ color: data.color });
+            }
+        }, 50); // 微調延遲確保 loadRoute 已執行完畢
+        
     } else {
-        // 備案：若無原始 XML 內容才手動注入
         allTracks = [{ name: data.name, points: data.points, waypoints: data.waypoints }];
         trackPoints = data.points; 
         loadRoute(0); 
+        // 手動修正 loadRoute 產生的線條顏色
+        if (window.activeRouteLayer) {
+            activeRouteLayer.setStyle({ color: data.color });
+        }
     }
 
-    // 4. 更新通用 UI 狀態
+    // 3. 更新 UI 狀態 (保持你原本的邏輯)
     const toggleBtn = document.getElementById("toggleChartBtn");
     if (toggleBtn) {
         toggleBtn.style.display = "block"; 
         toggleBtn.textContent = "收合高度表"; 
     }
-
     document.getElementById("chartContainer").style.display = "block";
     document.getElementById("wptList").style.display = "block";
-    document.getElementById("fileNameDisplay").textContent = `已匯入 ${multiGpxStack.length} 個 GPX 檔案`;
+    
+    // 如果是結合項，顯示稍微不同的文字提示
+    const displayMsg = data.isCombined ? `當前檢視：${data.name} (結合)` : `當前檢視：${data.name}`;
+    document.getElementById("fileNameDisplay").textContent = displayMsg;
 
-    // 5. 重置山岳偵測 (顯示按鈕但不自動執行)
+    // 4. 重置山岳偵測 (保持你原本的邏輯)
     if (typeof detectPeaksAlongRoute === 'function') {
         if (typeof peakAbortController !== 'undefined' && peakAbortController) {
             peakAbortController.abort();
