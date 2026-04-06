@@ -279,13 +279,6 @@ body.has-gpx-bar.iphone-fullscreen .map-compass {
     
     
     @media (max-width: 768px) { #map { height: 45vh; } #chartContainer { height: 220px; } }
-    @media (display-mode: standalone), (fullscreen) {
-    #multiGpxBtnBar {
-        /* 使用 env 取得 iPhone 底部小白條的高度，若非 iPhone 則預設為 15px */
-        padding-bottom: calc(env(safe-area-inset-bottom) + 10px);
-        background: rgba(0, 0, 0, 0.85); /* 全螢幕時稍微加深背景色 */
-    }
-}
   </style>
 </head>
 <body>
