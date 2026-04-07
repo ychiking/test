@@ -133,7 +133,14 @@
 	  flex-shrink: 0 !important;
 	  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 40px) !important;
 }
-		
+
+.iphone-fullscreen .map-compass {
+    position: fixed !important; /* 改成 fixed 脫離原本容器 */
+    bottom: 120px !important;
+    left: 15px !important;
+    z-index: 10005 !important;
+}
+	
     .custom-file-upload {
     display: inline-block;
     padding: 8px 8px;
