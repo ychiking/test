@@ -2201,6 +2201,14 @@ function switchMultiGpx(index) {
             }).bringToFront(); 
             
             if (btn) btn.classList.add('active');
+            
+            btn.scrollIntoView({
+                    behavior: 'smooth', // 平滑捲動
+                    block: 'nearest',   // 垂直方向捲到最近
+                    inline: 'center'    // 水平方向捲到中間 (最適合 GPX Bar)
+                });
+            
+            
             map.fitBounds(item.layer.getBounds(), { padding: [20, 20], maxZoom: 16 });
         } else {
             // --- 未選中的檔案 ---
