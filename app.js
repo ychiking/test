@@ -2060,7 +2060,10 @@ document.getElementById("multiGpxInput").addEventListener("change", async (e) =>
     if (!files || files.length === 0) return;
     
     // 2. 準備多檔匯入
-    document.getElementById("fileNameDisplay").textContent = `已匯入 ${files.length} 個 GPX 檔案`;
+    document.getElementById("fileNameDisplay").innerHTML = `
+    <span class="clear-all-btn" onclick="location.reload()" title="關閉所有檔案">✖</span> 
+    已匯入 ${files.length} 個 GPX 檔案
+`;
     clearAllMultiGPX(); 
     
     const hint = document.getElementById('importHint');

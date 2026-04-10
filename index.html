@@ -150,7 +150,9 @@
     border-radius: 20px;
     font-size: 14px;
     font-weight: bold;
-
+    align-items: center;
+    justify-content: center;
+    heighht: 25px;
     width: 80px;            /* 設定您想要的固定寬度 */
     text-align: center;     /* 讓文字置中 */
     flex-shrink: 0;         /* 防止在 Flex 佈局中被擠壓 */
@@ -289,9 +291,48 @@ body.has-gpx-bar.iphone-fullscreen #map .map-compass {
     /*<input type="file" id="gpxInput" accept=".gpx" style="display: none;" /> */
     /* <label for="gpxInput" class="custom-file-upload">匯入 GPX</label> */
     /*<label for="multiGpxInput" class="custom-file-upload" style="background-color: #28a745; margin-left: 5px;">匯入多個 GPX</label>  */
+/* 標題容器樣式 (確保文字和圖示對齊) */
+#importStatus {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: bold;
+}
+
+/* 這是針對那個 x 圖示的樣式 */
+.clear-all-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    margin-right: 8px;     /* 與文字的間距 */
+    background-color: #ff4d4d;
+    color: white;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 12px;       /* 叉叉稍微小一點看起來比較精緻 */
+    font-weight: bold;
+    transition: background 0.2s;
     
+    /* 微調：如果文字還是覺得偏高，可以使用相對定位壓低 1px */
+    position: relative;
+    top: 0px; 
+}
+
+.clear-all-btn:hover {
+    background-color: #d32f2f;
+}
+
     
     @media (max-width: 768px) { #map { height: 45vh; } #chartContainer { height: 220px; } }
+#fileNameDisplay {
+    display: flex;       /* 內部也用 flex */
+    align-items: center; /* 讓 X 和文字垂直置中 */
+    font-size: 15px;
+    color: #333;
+    line-height: 1;      /* 消除預設行高干擾 */
+}
     
    </style>
 </head>
