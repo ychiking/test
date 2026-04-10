@@ -778,10 +778,12 @@ polyline.on('click', (e) => {
             targetBtn.click(); 
             
             // Focus 該路徑
-            map.fitBounds(e.target.getBounds(), { padding: [20, 20] });
+            if (!isGpxInView(index)) {
+        map.fitBounds(item.layer.getBounds(), { padding: [20, 20], maxZoom: 16 });
+    }
             
             map.closePopup(); 
-            return; // 切換完就結束
+            return;  
         }
     }
 
@@ -2136,11 +2138,9 @@ document.getElementById("multiGpxInput").addEventListener("change", async (e) =>
     if (multiGpxStack.length > 0) {
         document.getElementById('multiGpxBtnBar').style.display = 'flex';
         renderMultiGpxButtons();
-        // map.fitBounds(allBounds);
         
 				const firstGpx = multiGpxStack[0];
 				    if (firstGpx && firstGpx.layer) {
-				        // 這裡手動呼叫縮放，不受 switchMultiGpx 內部的 window.event 限制
 				        map.fitBounds(firstGpx.layer.getBounds(), { padding: [20, 20], maxZoom: 16 });
 				    }
         
@@ -2181,10 +2181,9 @@ function switchMultiGpx(index) {
             
             
             // map.fitBounds(item.layer.getBounds(), { padding: [20, 20], maxZoom: 16 });
-            if (window.event && window.event.type === 'click' && window.event.target.closest('.gpx-file-btn')) {
-    // 只有當「真正的點擊事件」發生在「GPX Bar 的按鈕」上時，才縮放地圖
-    map.fitBounds(item.layer.getBounds(), { padding: [20, 20], maxZoom: 16 });
-}
+            if (!isGpxInView(index)) {
+        map.fitBounds(item.layer.getBounds(), { padding: [20, 20], maxZoom: 16 });
+    }
         } else {
             // --- 未選中的檔案 ---
             item.layer.setStyle({ 
@@ -2375,3 +2374,10 @@ const gMapIconBtn = `
              style="width:18px; height:18px; display:block;" 
              alt="Google Maps">
     </a>`;
+    
+function isGpxInView(index) {
+    const targetGpx = multiGpxStack[index];
+    if (!targetGpx || !targetGpx.layer) return false;
+    // 檢查目前地圖範圍是否與 GPX 範圍有重疊
+    return map.getBounds().intersects(targetGpx.layer.getBounds());
+}    
