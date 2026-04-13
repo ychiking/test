@@ -500,10 +500,9 @@ function clearEverything() {
     if (wptList) wptList.innerHTML = "";
 }
 
-function parseGPX(text, fileName) { 
+function parseGPX(text, fileName, shouldFit = true) { 
   const xml = new DOMParser().parseFromString(text, "application/xml");
   allTracks = [];
-  // 確保取得正確的 select 元素
   const routeSelect = document.getElementById("routeSelect"); 
   routeSelect.innerHTML = "";
   
@@ -514,7 +513,12 @@ function parseGPX(text, fileName) {
     const lat = parseFloat(w.getAttribute("lat")), lon = parseFloat(w.getAttribute("lon"));
     const name = w.getElementsByTagName("name")[0]?.textContent || "未命名航點";
     const time = w.getElementsByTagName("time")[0]?.textContent;
-    allWpts.push({ lat, lon, name, localTime: time ? formatDate(new Date(new Date(time).getTime() + 8*3600000)) : "無時間資訊" });
+    const ele = w.getElementsByTagName("ele")[0]?.textContent; // 建議順便取得高度
+    allWpts.push({ 
+      lat, lon, name, 
+      ele: ele ? parseFloat(ele) : 0,
+      localTime: time ? formatDate(new Date(new Date(time).getTime() + 8*3600000)) : "無時間資訊" 
+    });
   }
 
   // 2. 處理每一條路線 (trk)
@@ -530,10 +534,9 @@ function parseGPX(text, fileName) {
       const trackData = { 
         name: trks[i].getElementsByTagName("name")[0]?.textContent || `路線 ${i + 1}`, 
         points, 
-        waypoints: [] // 先預設空，下面再過濾
+        waypoints: [] 
       };
 
-      // 過濾屬於該段的航點
       trackData.waypoints = allWpts.filter(w => {
         return points.some(p => {
           const d = Math.sqrt((w.lat - p.lat)**2 + (w.lon - p.lon)**2) * 111000;
@@ -542,7 +545,6 @@ function parseGPX(text, fileName) {
       });
 
       allTracks.push(trackData);
-      
       combinedPoints = combinedPoints.concat(points);
       trackData.waypoints.forEach(rw => {
           if (!combinedWaypoints.find(cw => cw.name === rw.name && cw.lat === rw.lat)) {
@@ -552,7 +554,16 @@ function parseGPX(text, fileName) {
     }
   }
 
-  // --- 修改：增加一個以「檔名」命名的結合選項 ---
+  // --- 新增處理：如果沒有軌跡但有航點，建立虛擬軌跡讓程式能繼續運行 ---
+  if (allTracks.length === 0 && allWpts.length > 0) {
+    allTracks.push({
+      name: fileName || "僅含航點資料",
+      points: [], // 雖然沒有軌跡點，但讓結構完整
+      waypoints: allWpts
+    });
+  }
+
+  // --- 修改：增加結合選項 (僅在真的有多條軌跡時執行) ---
   if (allTracks.length > 1) {
     let totalDist = 0;
     const reCalibratedPoints = combinedPoints.map((p, idx, arr) => {
@@ -565,9 +576,8 @@ function parseGPX(text, fileName) {
         return { ...p, distance: totalDist };
     });
 
-    // 將結合路線放在陣列的第一個 (或最後一個，視您喜好)
     allTracks.unshift({
-      name: fileName || "結合路線", // <--- 這裡改用傳入的檔名
+      name: fileName || "結合路線", 
       points: reCalibratedPoints,
       waypoints: combinedWaypoints,
       isCombined: true
@@ -588,10 +598,13 @@ function parseGPX(text, fileName) {
     container.style.display = "none";
   }
   
-  // 預設載入第一個路線 (如果是多路線，則載入結合版)
-  loadRoute(0);
+  // 如果有資料才載入，避免 allTracks[0] 為 undefined 報錯
+  if (allTracks.length > 0) {
+    loadRoute(0, shouldFit);
+  } else {
+    alert("此 GPX 檔案不含有效的軌跡或航點資料。");
+  }
 }
-
 function extractPoints(pts) {
   let res = [], total = 0;
   for (let i = 0; i < pts.length; i++) {
@@ -2060,10 +2073,12 @@ document.getElementById("multiGpxInput").addEventListener("change", async (e) =>
     if (!files || files.length === 0) return;
     
     // 2. 準備多檔匯入
-    document.getElementById("fileNameDisplay").innerHTML = `
-    <span class="clear-all-btn" onclick="location.reload()" title="關閉所有檔案">✖</span> 
-    已匯入 ${files.length} 個 GPX 檔案
-`;
+			document.getElementById("fileNameDisplay").innerHTML = `
+		    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+		        <span>已匯入 ${files.length} 個 GPX 檔案</span>
+		        <button type="button" class="shortcut-btn" onclick="location.reload()" style="margin-left: 5px;">✕ 關閉</button>
+		    </div>
+		`;
     clearAllMultiGPX(); 
     
     const hint = document.getElementById('importHint');
