@@ -1833,9 +1833,16 @@ function renderWaypointsAndPeaks(currentRoute) {
   let shortcutsHtml = "";
 
  if (currentRoute.waypoints && currentRoute.waypoints.length > 0) {
-    // 1. 先加入「顯示/隱藏名稱」的功能按鈕到捷徑列
-    const btnText = showWptNameAlways ? "🏷️ 隱藏航點名稱" : "🏷️ 顯示航點名稱";
-    shortcutsHtml += `<button type="button" class="shortcut-btn" onclick="toggleWptNames()">${btnText}</button>`;
+    // --- 🏷️ 修改這裡：將原本的文字換成眼睛圖示與文字的組合 ---
+    const icon = showWptNameAlways ? "visibility_off" : "visibility";
+    const text = showWptNameAlways ? "航點名稱" : "航點名稱";
+    
+    // 1. 加入「顯示/隱藏名稱」的功能按鈕
+    shortcutsHtml += `
+      <button type="button" class="shortcut-btn" onclick="toggleWptNames()" style="display:inline-flex; align-items:center;">
+        <span class="material-icons" style="font-size:18px; margin-right:4px;">${icon}</span>
+        <span>${text}</span>
+      </button>`;
     
     // 2. 原本的「跳轉到航點列表」錨點按鈕
     shortcutsHtml += `<button type="button" class="shortcut-btn" onclick="document.getElementById('anchorWpt').scrollIntoView({behavior: 'smooth'})">📍 航點列表</button>`;

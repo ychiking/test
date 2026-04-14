@@ -8,6 +8,7 @@
   <link rel="apple-touch-icon" href="https://ychiking.github.io/gpx-online-viewer/webicon.png">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.8.0/proj4.js"></script>
@@ -33,6 +34,8 @@
             font-size: 14px;
             z-index: 1001; /* 確保在圖表上方 */
         }
+        
+        
     #routeInfo { margin-top: 5px; padding: 8px 8px; background: #fafafa; border-top: 1px solid #ddd; font-size: 15px; line-height: 1.6; }
     .upload-row { display: flex; align-items: center; gap: 8px; }
     .subtitle { margin-top: 8px; font-size: 14px; color: #555; line-height: 1.4; }
@@ -344,10 +347,11 @@ body.has-gpx-bar.iphone-fullscreen #map .map-compass {
 }
     
    </style>
+   
 </head>
 <body>
 <div id="header">
-	<strong style="font-size: 12px; color: #333;">YCHiking-GPX 路線檢視工具 v260414</strong> 
+	<strong style="font-size: 12px; color: #333;">YCHiking-GPX 路線檢視工具 v260415</strong> 
   <div class="upload-row">
     <input type="file" id="gpxInput" accept=".gpx" style="display: none;" />
     <input type="file" id="multiGpxInput" accept=".gpx" multiple style="display: none;" />
@@ -357,9 +361,14 @@ body.has-gpx-bar.iphone-fullscreen #map .map-compass {
   </div>
 <div class="subtitle">
   	<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px;">   
-    <div id="navShortcuts" style="display: flex; gap: 8px; align-items: center;"></div>
+    <div id="navShortcuts" style="display: flex; gap: 8px; align-items: center;">
+    <button id="toggleWptNameBtn" onclick="toggleWptNames()" class="shortcut-btn" style="display: none;">
+        <span id="eyeIcon" class="material-icons" style="vertical-align:middle; font-size:18px; margin-right:4px;">visibility</span>
+        <span id="wptBtnText" style="vertical-align:middle;">航點名稱</span>
+    </button>
+</div>
     <div id="routeSelectContainer" style="display: none; margin-top: 0;">
-    <select id="routeSelect" style="padding: 6px 12px; border-radius: 16px; border: 1px solid #ccc;"></select>
+    <select id="routeSelect" style="height: 28px; padding: 0 10px; border-radius: 16px; border: 1px solid #ccc; box-sizing: border-box;"></select>
     
     </div>
     
