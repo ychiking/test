@@ -3,6 +3,7 @@ const map = L.map("map", { tap: true }).setView([25.03, 121.56], 12);
 const osm = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap" }).addTo(map);
 const otm = L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", { maxZoom: 18, maxNativeZoom: 17, attribution: 'OpenTopoMap' });
 
+let showWptNameAlways = false; // 預設不直接顯示名字
 const emap = L.tileLayer("https://wmts.nlsc.gov.tw/wmts/EMAP/default/GoogleMapsCompatible/{z}/{y}/{x}", {
     maxZoom: 19,
     attribution: "內政部臺灣通用電子地圖",
@@ -678,6 +679,7 @@ function getBearingInfo(lat1, lon1, lat2, lon2) {
 
 // ================= 地圖載入與連動 =================
 function loadRoute(index, customColor = null) {
+	  window.currentActiveIndex = index;
     console.log(">>> [LOG] loadRoute 觸發成功，Index:", index); 
 
     map.closePopup();
@@ -685,6 +687,11 @@ function loadRoute(index, customColor = null) {
 
     const sel = allTracks[index];
     if (!sel) return;
+    
+    const wptToggleContainer = document.getElementById("wptToggleContainer");
+    if (wptToggleContainer) {
+        wptToggleContainer.style.display = "block";
+    }
 
     if (hoverMarker) {
         map.removeLayer(hoverMarker);
@@ -798,7 +805,7 @@ function loadRoute(index, customColor = null) {
     }
 
     // --- 3. 繪製航點 ---
-    if (sel.waypoints && sel.waypoints.length > 0) {
+		if (sel.waypoints && sel.waypoints.length > 0) {
         const wptLatLngs = [];
         sel.waypoints.forEach((w) => {
             wptLatLngs.push([w.lat, w.lon]);
@@ -811,6 +818,17 @@ function loadRoute(index, customColor = null) {
                 });
             }
             const wm = L.marker([w.lat, w.lon], { icon: wptIcon }).addTo(map);
+
+            // ✅ 新增：判斷開關是否開啟，開啟則永久顯示 Tooltip
+				if (showWptNameAlways) {
+				    wm.bindTooltip(w.name, { 
+				        permanent: true,
+				        direction: 'right',
+				        offset: [10, 0],
+				        className: 'wpt-label-label'
+				    }).openTooltip(); // ✅ 補上這一行強制開啟
+				}
+
             wm.on('click', (e) => { 
                 L.DomEvent.stopPropagation(e); 
                 showCustomPopup(tIdx, w.name, null, w.lat, w.lon); 
@@ -839,10 +857,26 @@ function loadRoute(index, customColor = null) {
     if (typeof renderWptList === 'function') renderWptList(sel.waypoints);
     
  }
+ 
+function toggleWptNames() {
+    showWptNameAlways = !showWptNameAlways;
+    
+    // ✅ 修改這裡：優先使用記錄過的索引，如果完全沒記錄才用 0
+    let currentIndex = (window.currentActiveIndex !== undefined) ? window.currentActiveIndex : 0;
+    
+    console.log(">>> [LOG] 航點名稱顯示開關:", showWptNameAlways, "當前索引:", currentIndex);
+    
+    // ✅ 重新載入「當前」這一條路線，就不會跳回第一條
+    loadRoute(currentIndex);
+}
+
 window.toggleCompass = function() {
 		const compass = document.querySelector(".map-compass");
     if (compass) { compass.classList.toggle("show"); }
 };
+
+
+
 
 // ================= 垂直控制項 =================
 const CombinedControl = L.Control.extend({
@@ -1798,14 +1832,21 @@ function renderWaypointsAndPeaks(currentRoute) {
   let listHtml = "";
   let shortcutsHtml = "";
 
-  if (currentRoute.waypoints && currentRoute.waypoints.length > 0) {
+ if (currentRoute.waypoints && currentRoute.waypoints.length > 0) {
+    // 1. 先加入「顯示/隱藏名稱」的功能按鈕到捷徑列
+    const btnText = showWptNameAlways ? "🏷️ 隱藏航點名稱" : "🏷️ 顯示航點名稱";
+    shortcutsHtml += `<button type="button" class="shortcut-btn" onclick="toggleWptNames()">${btnText}</button>`;
+    
+    // 2. 原本的「跳轉到航點列表」錨點按鈕
+    shortcutsHtml += `<button type="button" class="shortcut-btn" onclick="document.getElementById('anchorWpt').scrollIntoView({behavior: 'smooth'})">📍 航點列表</button>`;
+
+    // 航點表格標題與內容
     listHtml += `<h4 id="anchorWpt" style="margin: 20px 0 10px 0;">📍 航點列表 (${currentRoute.waypoints.length})</h4>`;
     listHtml += `<table class="wpt-table"><thead><tr><th style="width:10%">#</th><th style="width:40%">日期與時間</th><th style="width:50%">航點名稱</th></tr></thead><tbody>`;
     currentRoute.waypoints.forEach((w, i) => { 
       listHtml += `<tr><td><span class="wpt-link" onclick="focusWaypoint(${w.lat}, ${w.lon}, '${w.name}')">${i + 1}</span></td><td>${w.localTime || ''}</td><td>${w.name}</td></tr>`; 
     });
     listHtml += `</tbody></table>`;
-    shortcutsHtml += `<button type="button" class="shortcut-btn" onclick="document.getElementById('anchorWpt').scrollIntoView({behavior: 'smooth'})">📍 航點列表</button>`;
   }
 
   listHtml += `<h4 id="anchorPeak" style="margin: 30px 0 10px 0; font-size: 16px; color: #2c3e50; border-left: 5px solid #d35400; padding-left: 10px;">⛰️ 沿途山岳(200公尺內)</h4>`;
@@ -2185,7 +2226,7 @@ document.getElementById("multiGpxInput").addEventListener("change", async (e) =>
     document.getElementById("fileNameDisplay").innerHTML = `
         <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
             <span>已匯入 ${files.length} 個 GPX 檔案</span>
-            <button type="button" class="shortcut-btn" onclick="location.reload()" style="margin-left: 5px;">✕ 關閉</button>
+            <button type="button" class="shortcut-btn close-circle-btn" onclick="location.reload()">✕</button>
         </div>
     `;
     clearAllMultiGPX(); 
