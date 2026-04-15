@@ -513,22 +513,22 @@ function clearEverything() {
 }
 
 function parseGPX(text, fileName, shouldFit = true) { 
-  console.log(">>> [LOG] parseGPX 開始執行，檔案名稱:", fileName);
   const xml = new DOMParser().parseFromString(text, "application/xml");
   allTracks = [];
   const routeSelect = document.getElementById("routeSelect"); 
   routeSelect.innerHTML = "";
   
+  // 先處理檔名：移除副檔名 (例如：abc.gpx -> abc)
+  const displayName = fileName ? fileName.replace(/\.[^/.]+$/, "") : "結合路線";
+
   // 1. 取得所有原始航點 (wpt)
   const wpts = xml.getElementsByTagName("wpt");
-  console.log(">>> [LOG] 找到原始航點數量:", wpts.length);
   let allWpts = [];
   for (let w of wpts) {
     const lat = parseFloat(w.getAttribute("lat")), lon = parseFloat(w.getAttribute("lon"));
     const name = w.getElementsByTagName("name")[0]?.textContent || "未命名航點";
     const time = w.getElementsByTagName("time")[0]?.textContent;
-    const ele = w.getElementsByTagName("ele")[0]?.textContent; 
-    
+    const ele = w.getElementsByTagName("ele")[0]?.textContent; // 建議順便取得高度
     allWpts.push({ 
       lat, lon, name, 
       ele: ele ? parseFloat(ele) : 0,
@@ -538,7 +538,6 @@ function parseGPX(text, fileName, shouldFit = true) {
 
   // 2. 處理每一條路線 (trk)
   const trks = xml.getElementsByTagName("trk");
-  console.log(">>> [LOG] 找到 trk 軌跡數量:", trks.length);
   let combinedPoints = [];
   let combinedWaypoints = [];
 
@@ -553,7 +552,6 @@ function parseGPX(text, fileName, shouldFit = true) {
         waypoints: [] 
       };
 
-      // 將航點過濾給該軌跡
       trackData.waypoints = allWpts.filter(w => {
         return points.some(p => {
           const d = Math.sqrt((w.lat - p.lat)**2 + (w.lon - p.lon)**2) * 111000;
@@ -563,7 +561,6 @@ function parseGPX(text, fileName, shouldFit = true) {
 
       allTracks.push(trackData);
       combinedPoints = combinedPoints.concat(points);
-      
       trackData.waypoints.forEach(rw => {
           if (!combinedWaypoints.find(cw => cw.name === rw.name && cw.lat === rw.lat)) {
               combinedWaypoints.push(rw);
@@ -572,26 +569,40 @@ function parseGPX(text, fileName, shouldFit = true) {
     }
   }
 
-  // --- 處理「只有航點」的情況 ---
+  // --- 新增處理：如果沒有軌跡但有航點，建立虛擬軌跡讓程式能繼續運行 ---
   if (allTracks.length === 0 && allWpts.length > 0) {
-    console.log(">>> [LOG] 進入「僅航點」處理分支");
     allTracks.push({
-      name: fileName || "僅含航點資料",
-      points: [], 
+      name: displayName || "僅含航點資料",
+      points: [], // 雖然沒有軌跡點，但讓結構完整
       waypoints: allWpts
     });
   }
 
-  console.log(">>> [LOG] 目前 allTracks 總數:", allTracks.length);
+  // --- 修改：增加結合選項 (僅在真的有多條軌跡時執行) ---
+  if (allTracks.length > 1) {
+    let totalDist = 0;
+    const reCalibratedPoints = combinedPoints.map((p, idx, arr) => {
+        if (idx > 0) {
+            const a = arr[idx-1], R = 6371;
+            const dLat = (p.lat - a.lat) * Math.PI / 180, dLon = (p.lon - a.lon) * Math.PI / 180;
+            const x = Math.sin(dLat/2)**2 + Math.cos(a.lat*Math.PI/180) * Math.cos(p.lat*Math.PI/180) * Math.sin(dLon/2)**2;
+            totalDist += 2 * R * Math.asin(Math.sqrt(x));
+        }
+        return { ...p, distance: totalDist };
+    });
+
+    allTracks.unshift({
+      name: displayName, // 此處已改為顯示移除副檔名後的檔名
+      points: reCalibratedPoints,
+      waypoints: combinedWaypoints,
+      isCombined: true
+    });
+  }
 
   // 3. 渲染下拉選單
   const container = document.getElementById("routeSelectContainer");
-  if (allTracks.length > 1 && combinedPoints.length > 0) {
-    // ... (這裡保留您原本的 unshift 結合路線邏輯，省略不寫避免佔空間)
-  }
-
   if (allTracks.length > 1) {
-    if (container) container.style.display = "block";
+    container.style.display = "block";
     allTracks.forEach((t, i) => {
       const opt = document.createElement("option"); 
       opt.value = i; 
@@ -599,15 +610,13 @@ function parseGPX(text, fileName, shouldFit = true) {
       routeSelect.appendChild(opt);
     });
   } else {
-    if (container) container.style.display = "none";
+    container.style.display = "none";
   }
   
-  // 4. 最後載入第一筆資料
+  // 如果有資料才載入，避免 allTracks[0] 為 undefined 報錯
   if (allTracks.length > 0) {
-    console.log(">>> [LOG] 準備呼叫 loadRoute(0)");
-    loadRoute(0, null); 
+    loadRoute(0, shouldFit);
   } else {
-    console.log(">>> [LOG] 沒有軌跡也沒有航點");
     alert("此 GPX 檔案不含有效的軌跡或航點資料。");
   }
 }
