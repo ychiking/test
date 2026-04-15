@@ -3,6 +3,13 @@ const map = L.map("map", { tap: true }).setView([25.03, 121.56], 12);
 const osm = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap" }).addTo(map);
 const otm = L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", { maxZoom: 18, maxNativeZoom: 17, attribution: 'OpenTopoMap' });
 
+const mapDiv = document.getElementById('map');
+const rsContainer = document.getElementById('routeSelectContainer');
+mapDiv.appendChild(rsContainer); // 強行塞回地圖內，但這是在 Leaflet 初始化之後做的
+
+// 防止點擊選單地圖會動
+L.DomEvent.disableClickPropagation(rsContainer);
+
 let showWptNameAlways = false; // 預設不直接顯示名字
 const emap = L.tileLayer("https://wmts.nlsc.gov.tw/wmts/EMAP/default/GoogleMapsCompatible/{z}/{y}/{x}", {
     maxZoom: 19,
@@ -602,16 +609,33 @@ function parseGPX(text, fileName, shouldFit = true) {
   // 3. 渲染下拉選單
   const container = document.getElementById("routeSelectContainer");
   if (allTracks.length > 1) {
-    container.style.display = "block";
+    // 先清空，再加資料
+    routeSelect.innerHTML = "";
     allTracks.forEach((t, i) => {
-      const opt = document.createElement("option"); 
-      opt.value = i; 
-      opt.textContent = t.name;
-      routeSelect.appendChild(opt);
+        const opt = document.createElement("option"); 
+        opt.value = i; 
+        opt.textContent = t.name;
+        routeSelect.appendChild(opt); // 繼續用你的 routeSelect，沒問題！
     });
-  } else {
+
+    // 設定外層位置
+    container.style.cssText = "display: block !important; position: absolute; top: 10px; left: 60px; z-index: 9999;";
+
+    // 直接改 routeSelect 的顏色 (深灰邊框)
+    routeSelect.style.cssText = `
+        height: 30px;
+        padding: 0 8px;
+        border-radius: 15px;
+        border: 2px solid #555555;   /* 深灰色邊框 */
+        background: rgba(255, 255, 255, 0.9);
+        color: #333333;
+        font-size: 13px;
+        cursor: pointer;
+        outline: none;
+    `;
+} else {
     container.style.display = "none";
-  }
+}
   
   // 如果有資料才載入，避免 allTracks[0] 為 undefined 報錯
   if (allTracks.length > 0) {
