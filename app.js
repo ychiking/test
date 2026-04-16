@@ -807,10 +807,27 @@ function loadRoute(index, customColor = null) {
     };
 
     // --- 2. 繪製軌跡 ---
+        // --- 2. 繪製軌跡 ---
     if (trackPoints && trackPoints.length > 0) {
-        polyline = L.polyline(trackPoints.map(p => [p.lat, p.lon]), {
-            color: finalColor, weight: 6, opacity: 0.8
-        }).addTo(map);
+        // ✅ 修正多餘直線問題：判斷是否為「結合結果」
+        // 如果你的結合物件有設定 isCombined 標記，或名稱包含 "結合"
+        if (sel.name && sel.name.includes("結合") && sel.segments) {
+            // 如果你在結合時有保留原始段落資料 (sel.segments)，則分段繪製
+            const polylineGroup = [];
+            sel.segments.forEach(seg => {
+                const p = L.polyline(seg.map(p => [p.lat, p.lon]), {
+                    color: finalColor, weight: 6, opacity: 0.8
+                }).addTo(map);
+                polylineGroup.push(p);
+            });
+            // 為了讓後面的 getBounds() 能運作，建立一個虛擬群組
+            polyline = L.featureGroup(polylineGroup).addTo(map);
+        } else {
+            // 一般單一路線繪製
+            polyline = L.polyline(trackPoints.map(p => [p.lat, p.lon]), {
+                color: finalColor, weight: 6, opacity: 0.8
+            }).addTo(map);
+        }
 
         checkAndFitBounds(polyline.getBounds());
 
@@ -836,6 +853,7 @@ function loadRoute(index, customColor = null) {
 
         if (typeof drawElevationChart === 'function') drawElevationChart();
     }
+
 
     // --- 3. 繪製航點 ---
 		if (sel.waypoints && sel.waypoints.length > 0) {
