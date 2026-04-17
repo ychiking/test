@@ -710,8 +710,6 @@ function getBearingInfo(lat1, lon1, lat2, lon2) {
     return { deg: bearing.toFixed(0), name: directions[index] };
 }
 
-
-
 // ================= 地圖載入與連動 =================
 function loadRoute(index, customColor = null) {
     window.currentActiveIndex = index;
@@ -1747,68 +1745,6 @@ function updateABUI() {
         }
     }
 }
-
-// ================= 建議路徑功能 (AI 建議) =================
-let safePathLayer = null;
-
-window.drawSuggestedSafePath = function() {
-    if (!pointA || !pointB) {
-        alert("請先設定 A 點與 B 點");
-        return;
-    }
-
-    // 1. 清除舊有的建議路線
-    if (window.safePathLayer) map.removeLayer(window.safePathLayer);
-
-    // 2. 計算轉折點 (避開 C2 到 C3 之間的陡直區間)
-    // 我們取中點，並向「東南方」偏移，這通常是尋找支稜的專業判讀方向
-    const midLat = (pointA.lat + pointB.lat) / 2;
-    const midLon = (pointA.lon + pointB.lon) / 2;
-    
-    // 偏移邏輯：人為製造一個彎曲，讓路徑沿著較緩的地形走
-    // 這裡我們往東偏移約 0.0012 度 (約 100-150公尺)
-    const curvePoint = {
-        lat: midLat - 0.0003, 
-        lng: midLon + 0.0012  
-    };
-
-    // 3. 建立三點路徑 (起點 -> 建議轉折點 -> 終點)
-    const safeWaypoints = [
-        [pointA.lat, pointA.lon],
-        [curvePoint.lat, curvePoint.lng],
-        [pointB.lat, pointB.lon]
-    ];
-
-    // 4. 在地圖上繪製具有「彎度」的綠色導引線
-    window.safePathLayer = L.polyline(safeWaypoints, {
-        color: '#28a745', // 穩健的綠色
-        weight: 5,
-        dashArray: '10, 10', // 虛線代表導引
-        opacity: 0.9,
-        smoothFactor: 1.5 // 讓轉折處看起來更平滑
-    }).addTo(map);
-
-    // 5. 畫面自動縮放到這條新路線
-    map.fitBounds(window.safePathLayer.getBounds(), { padding: [50, 50] });
-};
-// 匯出建議路線為 GPX
-window.exportSafeGPX = function() {
-    if (!safePathLayer) return;
-    const pts = safePathLayer.getLatLngs();
-    let gpx = `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="YCHiking"><trk><name>建議避險路線</name><trkseg>`;
-    pts.forEach(p => {
-        gpx += `<trkpt lat="${p.lat}" lon="${p.lng}"></trkpt>`;
-    });
-    gpx += `</trkseg></trk></gpx>`;
-
-    const blob = new Blob([gpx], { type: 'application/gpx+xml' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'safe_route.gpx';
-    a.click();
-};
-
 
 function renderRouteInfo() {
   // 1. 安全檢查：確保 allTracks 存在且有內容
