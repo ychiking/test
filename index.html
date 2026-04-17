@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
+
 <head>
   <meta charset="UTF-8" />
   <title>YCHiking - GPX 路線檢視工具</title>
-  
+
   <link rel="icon" type="image/png" href="https://ychiking.github.io/gpx-online-viewer/webicon.png">
   <link rel="apple-touch-icon" href="https://ychiking.github.io/gpx-online-viewer/webicon.png">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
@@ -14,456 +15,604 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.8.0/proj4.js"></script>
 
   <style>
-    body { margin: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont; }
-    #header { padding: 5px 14px; background: #f6f6f6; border-bottom: 1px solid #ddd; }
-    #map { height: 520px; cursor: crosshair; }
-    #chartContainer { 
-    height: 300px; 
-    padding: 10px 16px; 
-    border-bottom: 1px solid #ddd; 
-    display: none; /* 加入這一行 */
-}
+    /* 基礎佈局 */
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont;
+    }
+
+    #header {
+      padding: 5px 14px;
+      background: #f6f6f6;
+      border-bottom: 1px solid #ddd;
+    }
+
+    #map {
+      height: 520px;
+      cursor: crosshair;
+    }
+
+    #chartContainer {
+      height: 300px;
+      padding: 10px 16px;
+      border-bottom: 1px solid #ddd;
+      display: none;
+    }
+
+    /* 按鈕與元件樣式 */
     #toggleChartBtn {
-            margin: 5px auto;
-            padding: 5px 15px;
-            background: #1a73e8;
-            color: white;
-            border: none;
-            border-radius: 20px;
-            cursor: pointer;
-            font-size: 14px;
-            z-index: 1001; /* 確保在圖表上方 */
-        }
-        
-        
-    #routeInfo { margin-top: 5px; padding: 8px 8px; background: #fafafa; border-top: 1px solid #ddd; font-size: 15px; line-height: 1.6; }
-    .upload-row { display: flex; align-items: center; gap: 8px; }
-    .subtitle { margin-top: 8px; font-size: 14px; color: #555; line-height: 1.4; }
+      margin: 5px auto;
+      padding: 5px 15px;
+      background: #1a73e8;
+      color: white;
+      border: none;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 14px;
+      z-index: 1001;
+    }
+
+    #routeInfo {
+      margin-top: 5px;
+      padding: 8px 8px;
+      background: #fafafa;
+      border-top: 1px solid #ddd;
+      font-size: 15px;
+      line-height: 1.6;
+    }
+
+    .upload-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .subtitle {
+      margin-top: 8px;
+      font-size: 14px;
+      color: #555;
+      line-height: 1.4;
+    }
+
+    /* 彈出視窗 (Modal) */
     .modal-overlay {
-      display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0,0,0,0.6); z-index: 3000; justify-content: center; align-items: center;
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.6);
+      z-index: 3000;
+      justify-content: center;
+      align-items: center;
     }
+
     .modal-content {
-      background: white; padding: 25px; border-radius: 12px; width: 90%; max-width: 450px; position: relative;
+      background: white;
+      padding: 25px;
+      border-radius: 12px;
+      width: 90%;
+      max-width: 450px;
+      position: relative;
     }
-    .coord-section { margin-bottom: 15px; padding: 12px; border: 1px solid #eee; border-radius: 8px; }
-    .coord-section h3 { margin: 0 0 10px 0; font-size: 15px; color: #1a73e8; }
-    label { display: block; margin: 10px 0 5px; font-size: 14px; color: #666; }
-    .result-box { 
-      margin-top: 10px; padding: 10px; background: #f8f9fa; border: 1px dashed #ccc; 
-      border-radius: 4px; cursor: pointer; font-size: 14px; text-align: center; min-height: 20px;
-    }
-    .error-text { color: #d93025 !important; background-color: #fce8e6 !important; border-color: #d93025 !important; }
-    .copy-success { background-color: #e6f4ea !important; border-color: #34a853 !important; color: #1e8e3e !important; }
-    
-    .coord-input { width: 100%; padding: 8px; box-sizing: border-box; margin-bottom: 8px; border: 1px solid #ccc; border-radius: 4px; }
-    .btn-group { display: flex; gap: 5px; }
-    .btn-primary { background: #1a73e8; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; flex: 1; }
-    .btn-geo { background: #34a853; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; flex: 1; }
 
-    .wpt-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
-    .wpt-table th, .wpt-table td { border-bottom: 1px solid #eee; padding: 8px 2px; text-align: left; }
-    .wpt-link { color: #007bff; text-decoration: underline; cursor: pointer; font-weight: bold; }
-    .ab-container { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0; }
-    .ab-box { flex: 1; min-width: 250px; border: 1px solid #ccc; border-radius: 8px; padding: 10px; background: white; border-left: 5px solid #ddd; }
-    .active-a { border-left-color: #007bff; }
-    .active-b { border-left-color: #e83e8c; }
+    .coord-section {
+      margin-bottom: 15px;
+      padding: 12px;
+      border: 1px solid #eee;
+      border-radius: 8px;
+    }
+
+    .coord-section h3 {
+      margin: 0 0 10px 0;
+      font-size: 15px;
+      color: #1a73e8;
+    }
+
+    label {
+      display: block;
+      margin: 10px 0 5px;
+      font-size: 14px;
+      color: #666;
+    }
+
+    .result-box {
+      margin-top: 10px;
+      padding: 10px;
+      background: #f8f9fa;
+      border: 1px dashed #ccc;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      text-align: center;
+      min-height: 20px;
+    }
+
+    /* 狀態顏色 */
+    .error-text {
+      color: #d93025 !important;
+      background-color: #fce8e6 !important;
+      border-color: #d93025 !important;
+    }
+
+    .copy-success {
+      background-color: #e6f4ea !important;
+      border-color: #34a853 !important;
+      color: #1e8e3e !important;
+    }
+
+    .coord-input {
+      width: 100%;
+      padding: 8px;
+      box-sizing: border-box;
+      margin-bottom: 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 5px;
+    }
+
+    .btn-primary {
+      background: #1a73e8;
+      color: white;
+      border: none;
+      padding: 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      flex: 1;
+    }
+
+    .btn-geo {
+      background: #34a853;
+      color: white;
+      border: none;
+      padding: 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      flex: 1;
+    }
+
+    /* 列表與分析框 */
+    .wpt-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 13px;
+    }
+
+    .wpt-table th,
+    .wpt-table td {
+      border-bottom: 1px solid #eee;
+      padding: 8px 2px;
+      text-align: left;
+    }
+
+    .wpt-link {
+      color: #007bff;
+      text-decoration: underline;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .ab-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 10px 0;
+    }
+
+    .ab-box {
+      flex: 1;
+      min-width: 250px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 10px;
+      background: white;
+      border-left: 5px solid #ddd;
+    }
+
+    .active-a {
+      border-left-color: #007bff;
+    }
+
+    .active-b {
+      border-left-color: #e83e8c;
+    }
+
     .btn-clear-all {
-		    padding: 4px 15px;
-		    background-color: #6c757d;
-		    color: white;
-		    border: none;
-		    border-radius: 20px; /* 圓角弧度 */
-		    font-size: 13px;
-		    cursor: pointer;
-		    transition: background 0.2s;
-		    line-height: 1.5;
-		  }
-		  .btn-clear-all:hover {
-		    background-color: #5a6268;
-		  }
-		    		/* N 字標記 (放在 0 刻度上方) */
-		.map-compass::after {
-		    content: 'N';
-		    position: absolute;
-		    top: -20px;
-		    font-weight: bold;
-		    color: #d32f2f;
-		    font-size: 14px;
-		    text-shadow: 1px 1px 0 white;
-		}
-		.shortcut-btn {
-    display: inline-block;
-    font-size: 12px;
-    background: #f0f0f0;
-    color: #555;
-    padding: 5px 12px;
-    border-radius: 15px;
-    border: 1px solid #ddd;   /* 確保有淡淡的邊框 */
-    cursor: pointer;          /* 讓滑鼠移上去顯示手指 */
-    font-family: inherit;      /* 繼承字體 */
-    line-height: 1.4;
-    outline: none;            /* 移除點擊時的藍色外框 */
-    vertical-align: middle;
-}
+      padding: 4px 15px;
+      background-color: #6c757d;
+      color: white;
+      border: none;
+      border-radius: 20px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.2s;
+      line-height: 1.5;
+    }
 
-.shortcut-btn:hover {
-    background: #e0e0e0;      /* 增加滑動時的深色效果 */
-}
-		
-.iphone-fullscreen {
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    width: 100vw !important;
-    height: 100vh !important;
-    z-index: 9999 !important;
-    background: white;
-    display: flex !important;
-    flex-direction: column !important; /* 地圖在上，按鈕在下 */
-}
+    .btn-clear-all:hover {
+      background-color: #5a6268;
+    }
 
-.iphone-fullscreen #map {
-    flex: 1 !important; 
-    height: 100% !important; 
-    width: 100% !important;
-}
+    /* 指北針標記 */
+    .map-compass::after {
+      content: 'N';
+      position: absolute;
+      top: -20px;
+      font-weight: bold;
+      color: #d32f2f;
+      font-size: 14px;
+      text-shadow: 1px 1px 0 white;
+    }
 
+    .shortcut-btn {
+      display: inline-block;
+      font-size: 12px;
+      background: #f0f0f0;
+      color: #555;
+      padding: 5px 12px;
+      border-radius: 15px;
+      border: 1px solid #ddd;
+      cursor: pointer;
+      font-family: inherit;
+      line-height: 1.4;
+      outline: none;
+      vertical-align: middle;
+    }
 
-.iphone-fullscreen #multiGpxBtnBar {
-	  display: flex !important;
-	  z-index: 10001 !important;
-	  flex-shrink: 0 !important;
-	  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 45px) !important;
-}
+    .shortcut-btn:hover {
+      background: #e0e0e0;
+    }
 
-.iphone-fullscreen .map-compass {
-    position: fixed !important; /* 改成 fixed 脫離原本容器 */
-    bottom: 90px !important;
-    left: 15px !important;
-    z-index: 10005 !important;
-}
-	
+    /* iPhone 全螢幕模式適配 */
+    .iphone-fullscreen {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      z-index: 9999 !important;
+      background: white;
+      display: flex !important;
+      flex-direction: column !important;
+    }
+
+    .iphone-fullscreen #map {
+      flex: 1 !important;
+      height: 100% !important;
+      width: 100% !important;
+    }
+
+    .iphone-fullscreen #multiGpxBtnBar {
+      display: flex !important;
+      z-index: 10001 !important;
+      flex-shrink: 0 !important;
+      padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 45px) !important;
+    }
+
+    .iphone-fullscreen .map-compass {
+      position: fixed !important;
+      bottom: 90px !important;
+      left: 15px !important;
+      z-index: 10005 !important;
+    }
+
     .custom-file-upload {
-    display: inline-block;
-    padding: 8px 8px;
-    cursor: pointer;
-    background: #007bff;
-    color: white;
-    border-radius: 20px;
-    font-size: 14px;
-    font-weight: bold;
-    align-items: center;
-    justify-content: center;
-    heighht: 20px;
-    width: 80px;            /* 設定您想要的固定寬度 */
-    text-align: center;     /* 讓文字置中 */
-    flex-shrink: 0;         /* 防止在 Flex 佈局中被擠壓 */
-    white-space: nowrap;    /* 防止文字換行 */
-}
-    .map-compass { position: absolute; bottom: 10px; left: 5px; z-index: 1000; background: rgba(255, 255, 255, 0.9); border-radius: 50%; width: 65px; height: 65px; display: flex; align-items: center; justify-content: center; opacity: 0; visibility: hidden; transition: all 0.3s; border: 1px solid #ccc; }
-    .map-compass.show { opacity: 1; visibility: visible; }
-    .shortcut-btn { font-size: 12px; background: #f0f0f0; color: #555; padding: 5px 12px; border-radius: 15px; text-decoration: none; border: 1px solid #ddd; font-weight: bold; }
+      display: inline-block;
+      padding: 8px 8px;
+      cursor: pointer;
+      background: #007bff;
+      color: white;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: bold;
+      align-items: center;
+      justify-content: center;
+      height: 20px;
+      width: 80px;
+      text-align: center;
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
 
-/* 新增：地圖底部多檔案按鈕欄樣式 */
-.multi-gpx-bar {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    background: rgba(0, 0, 0, 0.60); /* 稍微加深避免背景干擾 */
-    z-index: 1000;
-    
-    /* 關鍵設定 */
-    display: flex !important;
-    flex-wrap: nowrap !important;   /* 強制絕對不換行 */
-    overflow-x: auto !important;    /* 顯式開啟水平捲動 */
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch; /* 讓手機滑動有慣性流暢感 */
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-    
-    pointer-events: auto !important; /* 確保攔截點擊與滑動 */
-    touch-action: pan-x;
-}
+    .map-compass {
+      position: absolute;
+      bottom: 10px;
+      left: 5px;
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 50%;
+      width: 65px;
+      height: 65px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s;
+      border: 1px solid #ccc;
+    }
 
-/* 捲動條美化 */
-.multi-gpx-bar::-webkit-scrollbar { height: 6px; }
-.multi-gpx-bar::-webkit-scrollbar-thumb { background: #555; border-radius: 12px; }
+    .map-compass.show {
+      opacity: 1;
+      visibility: visible;
+    }
 
-/* 2. 修改按鈕：禁止被壓縮 */
-.gpx-file-btn {
-    pointer-events: auto !important;
-    
-    /* 關鍵設定：禁止壓縮 */
-    flex: 0 0 auto !important;      /* 讓按鈕維持原本寬度，不允許縮小 (flex-shrink: 0) */
-    
-    background: transparent;
-    color: white;
-    border: none;
-    padding: 8px 14px;              /* 稍微加大間距方便手指點擊 */
-    font-size: 14px;
-    cursor: pointer;
-    border-bottom: 3px solid transparent; /* 改為底部邊框在手機上視覺較直觀 */
-    border-radius: 4px;
-    margin: 0 4px;
-    
-    /* 文字處理 */
-    white-space: nowrap !important; 
-    max-width: 200px;               /* 手機建議縮小一點最大寬度，避免一個檔名佔滿螢幕 */
-    overflow: hidden;
-    text-overflow: ellipsis;
-    display: inline-block;
-    vertical-align: middle;
-    
-    opacity: 0.7;
-    transition: all 0.2s;
-}
+    /* 多檔案底部欄 */
+    .multi-gpx-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      background: rgba(0, 0, 0, 0.60);
+      z-index: 1000;
+      display: flex !important;
+      flex-wrap: nowrap !important;
+      overflow-x: auto !important;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+      pointer-events: auto !important;
+      touch-action: pan-x;
+    }
 
-/* 選中狀態修正 */
-.gpx-file-btn.active { 
-    opacity: 1; 
-    font-weight: bold; 
-    background: rgba(255, 255, 255, 0.15);
-    
-}
+    .multi-gpx-bar::-webkit-scrollbar {
+      height: 6px;
+    }
 
-/* 結合按鈕的特殊視覺區隔 */
-.gpx-file-btn.combined-btn {
-    background-color: rgba(60, 60, 60, 0.9) !important; /* 深一點的背景 */
-    font-weight: bold !important;
-    color: #ffd700 !important; /* 金色或亮色文字 */
-}
+    .multi-gpx-bar::-webkit-scrollbar-thumb {
+      background: #555;
+      border-radius: 12px;
+    }
 
-/* 選中狀態時，紅色的指示線（紅框空隙邏輯） */
-.gpx-file-btn.active {
-    background-color: rgba(255, 255, 255, 0.15) !important;
-    position: relative;
-}
+    .gpx-file-btn {
+      pointer-events: auto !important;
+      flex: 0 0 auto !important;
+      background: transparent;
+      color: white;
+      border: none;
+      padding: 8px 14px;
+      font-size: 14px;
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      border-radius: 4px;
+      margin: 0 4px;
+      white-space: nowrap !important;
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: inline-block;
+      vertical-align: middle;
+      opacity: 0.7;
+      transition: all 0.2s;
+    }
 
-/* 之前討論的紅條不貼上下邏輯 */
-.gpx-file-btn.active::after {
-    content: "";
-    position: absolute;
-    right: 0;
-    top: 20%;
-    height: 60%;
-    width: 3px;
-    background: #ff4d4d;
-}
+    .gpx-file-btn.active {
+      opacity: 1;
+      font-weight: bold;
+      background: rgba(255, 255, 255, 0.15) !important;
+      position: relative;
+    }
 
-/* 關閉按鈕修正：也必須禁止壓縮 */
-.gpx-file-btn.close-btn {
-    flex: 0 0 auto !important;
-    border: 1px solid white !important;
-    color: white !important;
-    background: transparent !important;
-    
-    margin: 6px 10px 6px 15px !important; 
-    height: 28px !important; 
+    .gpx-file-btn.active::after {
+      content: "";
+      position: absolute;
+      right: 0;
+      top: 20%;
+      height: 60%;
+      width: 3px;
+      background: #ff4d4d;
+    }
 
-    display: inline-flex !important;
-    align-items: center;
-    justify-content: center;
+    .gpx-file-btn.combined-btn {
+      background-color: rgba(60, 60, 60, 0.9) !important;
+      color: #ffd700 !important;
+      font-weight: bold !important;
+    }
 
-    border-radius: 20px !important;
-    padding: 0 12px !important;
-    font-size: 13px !important;
-    white-space: nowrap;
-    cursor: pointer;
-}
+    .gpx-file-btn.close-btn {
+      flex: 0 0 auto !important;
+      border: 1px solid white !important;
+      color: white !important;
+      background: transparent !important;
+      margin: 6px 10px 6px 15px !important;
+      height: 28px !important;
+      display: inline-flex !important;
+      align-items: center;
+      justify-content: center;
+      border-radius: 20px !important;
+      padding: 0 12px !important;
+      font-size: 13px !important;
+      white-space: nowrap;
+      cursor: pointer;
+    }
 
-.gpx-file-btn.close-btn:hover { background: rgba(255, 77, 77, 0.2); }
+    .gpx-file-btn.close-btn:hover {
+      background: rgba(255, 77, 77, 0.2);
+    }
 
+    /* 邊界元件偏移 */
+    body.has-gpx-bar .leaflet-bottom.leaflet-right {
+      margin-bottom: 46px !important;
+    }
 
-.leaflet-bottom.leaflet-right {
-    transition: margin-bottom
-}
+    body.has-gpx-bar .map-compass {
+      bottom: 50px;
+    }
 
-body.has-gpx-bar .leaflet-bottom.leaflet-right {
-    margin-bottom: 46px !important; /* 配合 GPX Bar 的高度 */
-}
+    body.has-gpx-bar.iphone-fullscreen #map .map-compass {
+      bottom: 90px !important;
+    }
 
-body.has-gpx-bar .map-compass {
-    bottom: 50px; /* 原本 10px + Bar 高度約 45px = 55px */
-}
+    #importStatus {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: bold;
+    }
 
-/* 3. 如果是 iPhone 全螢幕模式，可能需要推更高避免擋到系統條 */
-body.has-gpx-bar.iphone-fullscreen #map .map-compass {
-    bottom: 90px !important;
-}
-    /*<input type="file" id="gpxInput" accept=".gpx" style="display: none;" /> */
-    /* <label for="gpxInput" class="custom-file-upload">匯入 GPX</label> */
-    /*<label for="multiGpxInput" class="custom-file-upload" style="background-color: #28a745; margin-left: 5px;">匯入多個 GPX</label>  */
-/* 標題容器樣式 (確保文字和圖示對齊) */
-#importStatus {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-weight: bold;
-}
+    .wpt-name-label {
+      background: rgba(255, 255, 255, 0.8);
+      border: 1px solid #333;
+      border-radius: 3px;
+      padding: 1px 4px;
+      font-size: 12px;
+      font-weight: bold;
+      color: #000;
+      white-space: nowrap;
+      box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.3);
+    }
 
-.wpt-name-label {
-    background: rgba(255, 255, 255, 0.8);
-    border: 1px solid #333;
-    border-radius: 3px;
-    padding: 1px 4px;
-    font-size: 12px;
-    font-weight: bold;
-    color: #000;
-    white-space: nowrap;
-    box-shadow: 1px 1px 3px rgba(0,0,0,0.3);
-}
+    .close-circle-btn {
+      width: 16px;
+      height: 16px;
+      padding: 0 !important;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50% !important;
+      font-size: 12px;
+      background: #e0e0e0;
+      color: #666;
+      border: 1px solid #ccc;
+      line-height: 1;
+      margin-left: 2px;
+      vertical-align: middle;
+    }
 
-.close-circle-btn {
-    width: 16px;           /* 設定固定寬度 */
-    height: 16px;          /* 設定固定高度確保是正圓 */
-    padding: 0 !important; /* 移除原本的內距 */
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50% !important; /* 強制變圓形 */
-    font-size: 12px;       /* 調整 X 的大小 */
-    background: #e0e0e0;   /* 稍微深一點的灰色 */
-    color: #666;           /* X 的顏色 */
-    border: 1px solid #ccc;
-    line-height: 1;
-    margin-left: 2px;
-    vertical-align: middle;
-}
+    .close-circle-btn:hover {
+      background: #d0d0d0;
+      color: #333;
+    }
 
-.close-circle-btn:hover {
-    background: #d0d0d0;   /* 滑過時變深 */
-    color: #333;
-}
+    #fileNameDisplay {
+      display: flex;
+      align-items: center;
+      font-size: 15px;
+      color: #333;
+      line-height: 1;
+    }
 
-    
-    @media (max-width: 768px) { #map { height: 45vh; } #chartContainer { height: 220px; } }
-#fileNameDisplay {
-    display: flex;       /* 內部也用 flex */
-    align-items: center; /* 讓 X 和文字垂直置中 */
-    font-size: 15px;
-    color: #333;
-    line-height: 1;      /* 消除預設行高干擾 */
-}
-    
-   </style>
-   
+    @media (max-width: 768px) {
+      #map { height: 45vh; }
+      #chartContainer { height: 220px; }
+    }
+  </style>
 </head>
+
 <body>
-<div id="header">
-	<strong style="font-size: 12px; color: #333;">YCHiking-GPX 路線檢視工具 v260415</strong> 
-  <div class="upload-row">
-    <input type="file" id="gpxInput" accept=".gpx" style="display: none;" />
-    <input type="file" id="multiGpxInput" accept=".gpx" multiple style="display: none;" />
-    <label for="multiGpxInput" class="custom-file-upload">匯入GPX</label>   
-    <span id="fileNameDisplay" style="font-weight:500; margin-left:5px;">尚未選擇檔案</span> 
-    <span id="importHint" style="font-size: 12px; color: #777; margin-left: 0px;">(支援匯入多個GPX檔)</span>
-  </div>
-<div class="subtitle">
-  	<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px;">   
-    <div id="navShortcuts" style="display: flex; gap: 8px; align-items: center;">
-    <button id="toggleWptNameBtn" onclick="toggleWptNames()" class="shortcut-btn" style="display: none;">
-        <span id="eyeIcon" class="material-icons" style="vertical-align:middle; font-size:18px; margin-right:4px;">visibility</span>
-        <span id="wptBtnText" style="vertical-align:middle;">航點名稱</span>
-    </button>
-</div>
-    <div id="routeSelectContainer" style="display: none; margin-top: 0;">
-    <select id="routeSelect" style="height: 28px; padding: 0 10px; border-radius: 16px; border: 1px solid #ccc; box-sizing: border-box;"></select>
-    
+  <div id="header">
+    <strong style="font-size: 12px; color: #333;">YCHiking-GPX 路線檢視工具 v260417</strong>
+    <div class="upload-row">
+      <input type="file" id="gpxInput" accept=".gpx" style="display: none;" />
+      <input type="file" id="multiGpxInput" accept=".gpx" multiple style="display: none;" />
+      <label for="multiGpxInput" class="custom-file-upload">匯入GPX</label>
+      <span id="fileNameDisplay" style="font-weight:500; margin-left:5px;">尚未選擇檔案</span>
+      <span id="importHint" style="font-size: 12px; color: #777; margin-left: 0px;">(支援匯入多個GPX檔)</span>
     </div>
-    
+    <div class="subtitle">
+      <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px;">
+        <div id="navShortcuts" style="display: flex; gap: 8px; align-items: center;">
+          <button id="toggleWptNameBtn" onclick="toggleWptNames()" class="shortcut-btn" style="display: none;">
+            <span id="eyeIcon" class="material-icons" style="vertical-align:middle; font-size:18px; margin-right:4px;">visibility</span>
+            <span id="wptBtnText" style="vertical-align:middle;">航點名稱</span>
+          </button>
+        </div>
+        <div id="routeSelectContainer" style="display: none; margin-top: 0;">
+          <select id="routeSelect" style="height: 28px; padding: 0 10px; border-radius: 16px; border: 1px solid #ccc; box-sizing: border-box;"></select>
+        </div>
+      </div>
+    </div>
   </div>
-</div>
-</div>
 
-
-<div id="map">
-	<div id="multiGpxBtnBar" class="multi-gpx-bar" style="display: none;"></div>
- 	<div id="mapCompass" class="map-compass">
-    <svg width="100%" height="100%" viewBox="-10 -10 160 160">
+  <div id="map">
+    <div id="multiGpxBtnBar" class="multi-gpx-bar" style="display: none;"></div>
+    <div id="mapCompass" class="map-compass">
+      <svg width="100%" height="100%" viewBox="-10 -10 160 160">
         <circle cx="70" cy="70" r="65" fill="none" stroke="#ccc" stroke-width="1" />
         <circle cx="70" cy="70" r="55" fill="white" fill-opacity="0.8" />
-        
         <text x="70" y="10" text-anchor="middle" font-size="20" font-weight="bold" fill="#d32f2f">北</text>
         <text x="70" y="32" text-anchor="middle" font-size="20" fill="#d32f2f">0</text>
-        
         <text x="122" y="70" text-anchor="middle" font-size="20" font-weight="bold" fill="#333">東</text>
         <text x="122" y="90" text-anchor="middle" font-size="16" fill="#333">90</text>
-        
         <text x="70" y="145" text-anchor="middle" font-size="20" font-weight="bold" fill="#333">南</text>
         <text x="70" y="122" text-anchor="middle" font-size="16" fill="#333">180</text>
-        
         <text x="18" y="70" text-anchor="middle" font-size="20" font-weight="bold" fill="#333">西</text>
         <text x="18" y="90" text-anchor="middle" font-size="16" fill="#333">270</text>
-
         <path d="M70,35 L62,70 L70,70 Z" fill="#d32f2f" />
-        <path d="M70,35 L78,70 L70,70 Z" fill="#b71c1c" /> <path d="M70,105 L62,70 L70,70 Z" fill="#777" />
-        <path d="M70,105 L78,70 L70,70 Z" fill="#555" /> <circle cx="70" cy="70" r="4" fill="#333" stroke="white" stroke-width="1" />
-</div>
-</div>
+        <path d="M70,35 L78,70 L70,70 Z" fill="#b71c1c" />
+        <path d="M70,105 L62,70 L70,70 Z" fill="#777" />
+        <path d="M70,105 L78,70 L70,70 Z" fill="#555" />
+        <circle cx="70" cy="70" r="4" fill="#333" stroke="white" stroke-width="1" />
+      </svg>
+    </div>
+  </div>
 
-<div id="routeSelectContainer" style="display: none; position: absolute; top: 10px; left: 60px; z-index: 9999;">
+  <div id="routeSelectContainer" style="display: none; position: absolute; top: 10px; left: 60px; z-index: 9999;">
     <select id="routeSelect" style="width: 120px; height: 30px; border-radius: 15px; background: white; border: 1px solid #333333;"></select>
-</div>
+  </div>
 
-<div id="coordModal" class="modal-overlay">
+  <div id="coordModal" class="modal-overlay">
     <div class="modal-content" onclick="event.stopPropagation()">
-        <span style="position: absolute; top: 10px; right: 15px; font-size: 28px; cursor: pointer; color: #999;" 
-              onclick="document.getElementById('coordModal').style.display='none'; clearCoordInputs();">&times;</span>
-        
-        <h2 style="color: #1a73e8; text-align: center; margin-top: 0; margin-bottom: 20px;">座標定位與轉換</h2>
-
-        <div class="coord-section">
-            <h3>WGS84 ➜ TWD97</h3>
-            <label>輸入經緯度 (緯度, 經度)</label>
-            <input type="text" id="wgs_input" class="coord-input" placeholder="(例如: 24.86, 121.45)">
-            <div class="btn-group">
-                <button class="btn-geo" onclick="getLocation()">📍 讀取定位</button>
-                <button class="btn-primary" onclick="toTWD97()">轉換</button>
-            </div>
-            <div id="res_twd97" class="result-box" onclick="copyText('res_twd97')">結果顯示在此 (點擊可複製)</div>
+      <span style="position: absolute; top: 10px; right: 15px; font-size: 28px; cursor: pointer; color: #999;" onclick="document.getElementById('coordModal').style.display='none'; clearCoordInputs();">&times;</span>
+      <h2 style="color: #1a73e8; text-align: center; margin-top: 0; margin-bottom: 20px;">座標定位與轉換</h2>
+      <div class="coord-section">
+        <h3>WGS84 ➜ TWD97</h3>
+        <label>輸入經緯度 (緯度, 經度)</label>
+        <input type="text" id="wgs_input" class="coord-input" placeholder="(例如: 24.86, 121.45)">
+        <div class="btn-group">
+          <button class="btn-geo" onclick="getLocation()">📍 讀取定位</button>
+          <button class="btn-primary" onclick="toTWD97()">轉換</button>
         </div>
-
-        <div class="coord-section">
-            <h3>TWD97 ➜ WGS84</h3>
-            <label>輸入TWD97 (X, Y)</label>
-            <input type="text" id="twd_input" class="coord-input" placeholder="(例如: 296325, 2751276)">
-            <button class="btn-primary" style="width: 100%;" onclick="toWGS84()">轉換</button>
-            <div id="res_wgs84" class="result-box" onclick="copyText('res_wgs84')">結果顯示在此 (點擊可複製)</div>
-        </div>
+        <div id="res_twd97" class="result-box" onclick="copyText('res_twd97')">結果顯示在此 (點擊可複製)</div>
+      </div>
+      <div class="coord-section">
+        <h3>TWD97 ➜ WGS84</h3>
+        <label>輸入TWD97 (X, Y)</label>
+        <input type="text" id="twd_input" class="coord-input" placeholder="(例如: 296325, 2751276)">
+        <button class="btn-primary" style="width: 100%;" onclick="toWGS84()">轉換</button>
+        <div id="res_wgs84" class="result-box" onclick="copyText('res_wgs84')">結果顯示在此 (點擊可複製)</div>
+      </div>
     </div>
+  </div>
+
+  <button id="toggleChartBtn" onclick="toggleElevationChart()" style="display: none;">展開/收合高度表</button>
+  <div id="chartContainer"><canvas id="elevationChart"></canvas></div>
+
+  <div id="routeInfo">
+    <div id="routeSummary">尚未讀取資料</div>
+    <hr style="border: 0; border-top: 1px solid #eee; margin: 15px 0;">
+    <div class="ab-header-row">
+      <span class="ab-title">區間標記設定</span>
+      <button class="btn-clear-all" onclick="clearABSettings()">清除 A B 點</button>
+    </div>
+    <div class="ab-container">
+      <div id="boxA" class="ab-box active-a">
+        <b>A 點</b>
+        <div id="infoA" style="font-size:13px; color:#666;">尚未設定</div>
+      </div>
+      <div id="boxB" class="ab-box active-b">
+        <b>B 點</b> (請確認B點時間需晚於A點時間)
+        <div id="infoB" style="font-size:13px; color:#666;">尚未設定</div>
+      </div>
+    </div>
+    <div id="boxRes" class="ab-box result" style="display:none; margin-top:10px; border:1px solid #28a745; border-radius:8px; padding:10px; background:#f8fff9;">
+      <b style="color:#28a745;">區間分析 (A ↔ B)</b>
+      <div id="infoRes" style="font-size:13px;"></div>
+    </div>
+    <div id="wptList"></div>
+  </div>
+  <div style="margin-top:10px;">
+  <button class="btn-primary" onclick="drawSuggestedSafePath()">生成建議路線</button>
+  <button id="btnExportSafe" class="btn-primary" style="display:none; background:#17a2b8;" onclick="exportSafeGPX()">匯出建議 GPX</button>
+  <button class="btn-clear-all" style="width:auto; padding:2px 10px;" onclick="if(safePathLayer) map.removeLayer(safePathLayer);">清空</button>
 </div>
-
-<button id="toggleChartBtn" onclick="toggleElevationChart()" style="display: none;">展開/收合高度表</button>
-<div id="chartContainer"><canvas id="elevationChart"></canvas></div>
-<div id="routeInfo">
-  <div id="routeSummary">尚未讀取資料</div>
-  
-  <hr style="border: 0; border-top: 1px solid #eee; margin: 15px 0;">
-
-  <div class="ab-header-row">
-    <span class="ab-title">區間標記設定</span>
-    <button class="btn-clear-all" onclick="clearABSettings()">清除 A B 點</button>
-  </div>
-  
-  <div class="ab-container">
-    <div id="boxA" class="ab-box active-a" style="flex:1; min-width:250px; border:1px solid #ccc; border-radius:8px; padding:10px; background:white; border-left:5px solid #007bff;">
-      <b>A 點</b>
-      <div id="infoA" style="font-size:13px; color:#666;">尚未設定</div>
-    </div>
-    <div id="boxB" class="ab-box active-b" style="flex:1; min-width:250px; border:1px solid #ccc; border-radius:8px; padding:10px; background:white; border-left:5px solid #e83e8c;">
-      <b>B 點</b> (請確認B點時間需晚於A點時間)
-      <div id="infoB" style="font-size:13px; color:#666;">尚未設定</div>
-    </div>
-  </div>
-
-  <div id="boxRes" class="ab-box result" style="display:none; margin-top:10px; border:1px solid #28a745; border-radius:8px; padding:10px; background:#f8fff9;">
-    <b style="color:#28a745;">區間分析 (A ↔ B)</b>
-    <div id="infoRes" style="font-size:13px;"></div>
-  </div>
-
-  <div id="wptList"></div>
-</div>
-<script src="app.js"></script>
+  <script src="app.js"></script>
 </body>
+
 </html>
