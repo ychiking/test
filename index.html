@@ -507,7 +507,7 @@
 
 <body>
   <div id="header">
-    <strong style="font-size: 12px; color: #333;">YCHiking-GPX 路線檢視工具 v260417</strong>
+    <strong style="font-size: 12px; color: #333;">YCHiking-GPX 路線檢視工具 v260420</strong>
     <div class="upload-row">
       <input type="file" id="gpxInput" accept=".gpx" style="display: none;" />
       <input type="file" id="multiGpxInput" accept=".gpx" multiple style="display: none;" />
@@ -551,6 +551,26 @@
         <circle cx="70" cy="70" r="4" fill="#333" stroke="white" stroke-width="1" />
       </svg>
     </div>
+    <div id="map-control-bar" style="
+    position: absolute; 
+    bottom: 80px; 
+    left: 50%; 
+    transform: translateX(-50%); 
+    width: 70%; 
+    height: 45px; 
+    background: rgba(255, 255, 255, 0.9); 
+    z-index: 1000; 
+    display: none; /* 預設隱藏 */
+    align-items: center; 
+    padding: 0 15px; 
+    border-radius: 25px; 
+    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    pointer-events: auto;
+">
+    <input type="range" id="gpxProgressBar" min="0" max="100" value="0" style="flex: 1; cursor: pointer;">
+    <span id="progressBarInfo" style="margin-left: 10px; font-size: 13px; font-weight: bold; min-width: 70px; color: #333;">0.00 km</span>
+</div>
+</div>
   </div>
 
   <div id="routeSelectContainer" style="display: none; position: absolute; top: 10px; left: 60px; z-index: 9999;">
@@ -582,6 +602,10 @@
   </div>
 
   <button id="toggleChartBtn" onclick="toggleElevationChart()" style="display: none;">展開/收合高度表</button>
+	<label id="chartTipToggleLabel" style="display: none; align-items: center; justify-content: center; cursor: pointer; font-size: 14px; color: #555; margin-top: 5px;">
+    <input type="checkbox" id="showChartTipCheckbox" checked style="margin-right: 5px;">
+    拖移時顯示位置資訊
+  </label>
   <div id="chartContainer"><canvas id="elevationChart"></canvas></div>
 
   <div id="routeInfo">
