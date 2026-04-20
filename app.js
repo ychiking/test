@@ -726,37 +726,40 @@ function setupProgressBar() {
     const progressBar = document.getElementById("gpxProgressBar");
     if (!barContainer || !progressBar) return;
 
-    // 阻止地圖連動（防止拉進度條時地圖也跟著位移）
+    // 阻止滑動條的操作影響到地圖拖動 (手機上非常重要)
     L.DomEvent.disableClickPropagation(barContainer);
     L.DomEvent.disableScrollPropagation(barContainer);
 
-    // --- 全螢幕顯示邏輯 ---
-    const handleFullscreenChange = () => {
-        // 判斷是否處於全螢幕狀態 (相容多種瀏覽器與 iPhone 模式)
-        const isFullScreen = !!(
-            document.fullscreenElement || 
-            document.webkitFullscreenElement || 
-            document.mozFullScreenElement || 
-            document.msFullscreenElement ||
-            document.body.classList.contains('iphone-fullscreen')
-        );
-
-        // 只有在全螢幕且有軌跡點時顯示
-        if (isFullScreen && typeof trackPoints !== 'undefined' && trackPoints.length > 0) {
-            barContainer.style.display = "flex";
+    // 統一檢查顯示狀態的邏輯
+    const updateVisibility = () => {
+        // 偵測是否處於全螢幕狀態 (電腦端 API || iPhone 專用的 Class)
+        const isStandardFull = !!(document.fullscreenElement || document.webkitFullscreenElement);
+        const isIphoneFull = document.body.classList.contains('iphone-fullscreen');
+        
+        // 只有在全螢幕「且」有資料時才顯示
+        if ((isStandardFull || isIphoneFull) && typeof trackPoints !== 'undefined' && trackPoints.length > 0) {
+            barContainer.style.setProperty('display', 'flex', 'important');
         } else {
-            barContainer.style.display = "none";
+            barContainer.style.setProperty('display', 'none');
         }
     };
 
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
-    // 針對您程式碼中 iPhone 全螢幕模式的 class 變動進行觀察
-    const observer = new MutationObserver(() => handleFullscreenChange());
-    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    // 監聽電腦/安卓標準全螢幕事件
+    document.addEventListener('fullscreenchange', updateVisibility);
+    document.addEventListener('webkitfullscreenchange', updateVisibility);
 
-    // 原本的 Progress Bar 拉動監聽
-    progressBar.addEventListener("input", function(e) {
+    // 核心：監聽 iPhone 模式切換 (偵測 body 的 class 變化)
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            if (mutation.attributeName === 'class') {
+                updateVisibility();
+            }
+        });
+    });
+    observer.observe(document.body, { attributes: true });
+
+    // 進度條拉動邏輯
+    progressBar.addEventListener("input", function() {
         const idx = parseInt(this.value);
         if (!trackPoints || !trackPoints[idx]) return;
         const p = trackPoints[idx];
@@ -764,12 +767,10 @@ function setupProgressBar() {
         if (hoverMarker) {
             hoverMarker.setLatLng([p.lat, p.lon]).bringToFront();
             if (!map.getBounds().contains([p.lat, p.lon])) {
-                map.panTo([p.lat, p.lon]);
+                map.panTo([p.lat, p.lon], { animate: false }); // 手機關閉動畫較流暢
             }
         }
-
-        const infoSpan = document.getElementById("progressBarInfo");
-        if (infoSpan) infoSpan.textContent = `${p.distance.toFixed(2)} km`;
+        document.getElementById("progressBarInfo").textContent = `${p.distance.toFixed(2)} km`;
         
         if (typeof showCustomPopup === 'function') {
             const checkbox = document.getElementById("showChartTipCheckbox");
@@ -780,16 +781,15 @@ function setupProgressBar() {
     });
 }
 
-// 這是您剛才問的另一個函式，也要記得加進去
 function initProgressBar() {
     const bar = document.getElementById("gpxProgressBar");
     if (typeof trackPoints !== 'undefined' && trackPoints.length > 0 && bar) {
         bar.max = trackPoints.length - 1;
         bar.value = 0;
         document.getElementById("progressBarInfo").textContent = "0.00 km";
+        // 不要設定 barContainer.style.display，讓 updateVisibility 去判斷
     }
 }
-
 // ================= 地圖載入與連動 =================
 function loadRoute(index, customColor = null) {
     window.currentActiveIndex = index;
