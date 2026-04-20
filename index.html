@@ -502,6 +502,26 @@
       #map { height: 45vh; }
       #chartContainer { height: 220px; }
     }
+    
+    /* 優化滑動條在 iPhone 上的手感 */
+#gpxProgressBar {
+    -webkit-appearance: none;
+    background: #ddd;
+    height: 8px;
+    border-radius: 4px;
+}
+
+/* 讓滑動按鈕在 iPhone 上變大一點，好按很多 */
+#gpxProgressBar::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 24px;
+    height: 24px;
+    background: #1a73e8;
+    border-radius: 50%;
+    border: 2px solid white;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    cursor: pointer;
+}
   </style>
 </head>
 
