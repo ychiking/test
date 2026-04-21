@@ -784,15 +784,7 @@ function setupProgressBar() {
     if (mainCheckbox) mainCheckbox.addEventListener('change', (e) => handleCheckboxChange(e.target.checked));
     if (fsCheckbox) fsCheckbox.addEventListener('change', (e) => handleCheckboxChange(e.target.checked));
 
-    這通常是因為在 iPhone 虛擬全螢幕模式下，地圖的 z-index 或 CSS 類別（如 .iphone-fullscreen）覆蓋了所有控制項，或者因為 updateVisibility 在判定 isIphoneFS 時，邏輯與 manualShowBar 發生了衝突。
-
-要解決「iPhone 全螢幕下按鈕失效」的問題，我們需要修正兩個部分：確保按鈕點擊事件不被阻擋，並確保 updateVisibility 的邏輯完全受控於手動變數。
-
-1. 修正 updateVisibility
-在 iPhone 全螢幕下，CSS 渲染可能比較嚴格，我們必須確保 display: flex !important 被正確執行。
-
-JavaScript
-window.updateVisibility = () => {
+    window.updateVisibility = () => {
     const barContainer = document.getElementById("map-control-bar");
     if (!barContainer) return;
 
