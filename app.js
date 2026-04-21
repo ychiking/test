@@ -3005,25 +3005,29 @@ window.toggleFullScreen = function() {
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
     if (isIOS) {
-        // iPhone 使用虛擬全螢幕
         const isFull = mapDiv.classList.contains('iphone-fullscreen');
         if (!isFull) {
             mapDiv.classList.add('iphone-fullscreen');
-            document.body.style.overflow = 'hidden'; // 防止背景捲動
+            document.body.classList.add('iphone-fullscreen'); // 確保 body 也有 class
+            document.body.style.overflow = 'hidden';
+            window.currentMapSize = 'full'; // 強制同步狀態
         } else {
             mapDiv.classList.remove('iphone-fullscreen');
+            document.body.classList.remove('iphone-fullscreen');
             document.body.style.overflow = '';
+            window.currentMapSize = 'standard'; // 退出時預設回歸標準
         }
     } else {
-        // Android / PC 使用原生 API
+        // Android / PC 邏輯維持...
         if (!document.fullscreenElement) {
             if (mapDiv.requestFullscreen) mapDiv.requestFullscreen();
+            window.currentMapSize = 'full';
         } else {
             document.exitFullscreen();
+            window.currentMapSize = 'standard';
         }
     }
     
-    // 切換後刷新進度條與地圖
     setTimeout(() => {
         map.invalidateSize();
         if (window.updateVisibility) window.updateVisibility();
@@ -3072,12 +3076,15 @@ mapSizeCtrl.onAdd = function() {
     function updateList() {
     list.innerHTML = ''; 
     
-    // 1. 偵測是否處於任何一種全螢幕狀態 (原生 或 iPhone 虛擬)
+    // 重新抓取即時狀態
+    const isIphoneFS = document.body.classList.contains('iphone-fullscreen') || 
+                       document.getElementById('map').classList.contains('iphone-fullscreen');
     const isNativeFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
-    const isIphoneFS = document.body.classList.contains('iphone-fullscreen');
-    const isCurrentlyFull = isNativeFS || isIphoneFS;
+    
+    // 只要其中一個成立，就是全螢幕
+    const isCurrentlyFull = isIphoneFS || isNativeFS;
 
-    // 2. 取得目前的尺寸 (預設為 standard)
+    // 取得當前尺寸
     const currentSize = window.currentMapSize || 'standard';
     
     const allOptions = [
@@ -3087,19 +3094,18 @@ mapSizeCtrl.onAdd = function() {
     ];
 
     allOptions.forEach((opt) => {
-        // --- 核心修正邏輯 ---
-        
-        // 如果目前是全螢幕：隱藏「全螢幕」選項，顯示「標準」與「大圖」
+        // --- 修正後的過濾邏輯 ---
         if (isCurrentlyFull) {
+            // 在全螢幕下，絕對不顯示「全螢幕」按鈕
             if (opt.val === 'full') return;
-        } 
-        // 如果目前非全螢幕：隱藏「當前尺寸」選項，顯示另外兩個
-        else {
+        } else {
+            // 在一般模式下，不顯示當前尺寸
             if (opt.val === currentSize) return;
         }
 
         const item = L.DomUtil.create('div', '', list);
         item.innerHTML = opt.label;
+        // ... (樣式代碼不變)
         item.style.padding = '0 12px';
         item.style.fontSize = '13px';
         item.style.lineHeight = '30px';
@@ -3109,15 +3115,15 @@ mapSizeCtrl.onAdd = function() {
 
         L.DomEvent.on(item, 'click', function(e) {
             L.DomEvent.stop(e);
-            
             if (opt.val === 'full') {
                 window.toggleFullScreen();
             } else {
-                // 如果在 iPhone 全螢幕下點擊「標準」或「大圖」，需先退出全螢幕
                 if (isCurrentlyFull) {
-                    window.toggleFullScreen(); 
+                    window.toggleFullScreen(); // 這裡會幫我們把狀態設回標準
+                    setTimeout(() => { window.changeMapSize(opt.val); }, 350);
+                } else {
+                    window.changeMapSize(opt.val);
                 }
-                window.changeMapSize(opt.val);
             }
             list.style.display = 'none'; 
         });
