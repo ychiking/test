@@ -788,24 +788,22 @@ function setupProgressBar() {
     const barContainer = document.getElementById("map-control-bar");
     if (!barContainer) return;
 
-    const isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
-    const isIphoneFS = document.body.classList.contains('iphone-fullscreen');
-    const isLandscape = window.innerWidth > window.innerHeight && window.innerHeight < 500;
-    const mapDiv = document.getElementById('map');
-    const isResized = mapDiv.offsetHeight > 450; 
-    
+    // 只有在「有軌跡資料」且「使用者手動開啟」時才顯示
     const hasTracks = (typeof trackPoints !== 'undefined' && trackPoints && trackPoints.length > 0);
     
-    if (hasTracks && (isFS || isIphoneFS || isResized)) {
+    if (hasTracks && window.manualShowBar) {
         barContainer.style.setProperty('display', 'flex', 'important');
         
-        // 智慧定位
+        // 僅處理位置定位
+        const isFS = !!(document.fullscreenElement || document.webkitFullscreenElement || document.body.classList.contains('iphone-fullscreen'));
+        const isLandscape = window.innerWidth > window.innerHeight && window.innerHeight < 500;
+
         if (isLandscape) {
-            barContainer.style.bottom = '5px'; // 橫放時最底
-        } else if (isFS || isIphoneFS) {
-            barContainer.style.bottom = '100px'; // 全螢幕時避開底部虛擬按鈕
+            barContainer.style.bottom = '5px';
+        } else if (isFS) {
+            barContainer.style.bottom = '100px';
         } else {
-            barContainer.style.bottom = '65px'; // 直放中/大圖時避開匯入列
+            barContainer.style.bottom = '65px';
         }
     } else {
         barContainer.style.setProperty('display', 'none');
@@ -2972,7 +2970,7 @@ window.changeMapSize = function(size) {
     let heightVal;
     if (size === 'standard') {
         // 標準現在使用原本中圖的比例
-        heightVal = isMobile ? '45vh' : '520px'; 
+        heightVal = isMobile ? '45vh' : '550px'; 
     } else if (size === 'large') {
         heightVal = '85vh';
     }
@@ -3028,17 +3026,23 @@ window.toggleFullScreen = function() {
     }, 300);
 };
 
-// --- 控制按鈕組 (左上角) ---
+window.manualShowBar = false; 
+
 const mapSizeCtrl = L.control({ position: 'topleft' });
 
 mapSizeCtrl.onAdd = function() {
-    const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
-    container.style.backgroundColor = 'white';
+    const container = L.DomUtil.create('div', 'leaflet-control-group');
     container.style.display = 'flex';
-    container.style.alignItems = 'center';
-    container.style.border = '1px solid #ccc';
+    container.style.flexDirection = 'column';
+    container.style.gap = '8px';
 
-    const mainBtn = L.DomUtil.create('div', '', container);
+    // --- 1. 地圖大小控制組 ---
+    const sizeWrapper = L.DomUtil.create('div', 'leaflet-bar', container);
+    sizeWrapper.style.backgroundColor = 'white';
+    sizeWrapper.style.display = 'block'; // 改為 block
+    sizeWrapper.style.position = 'relative'; 
+
+    const mainBtn = L.DomUtil.create('div', '', sizeWrapper);
     mainBtn.innerHTML = '⛶';
     mainBtn.style.width = '30px';
     mainBtn.style.height = '30px';
@@ -3046,56 +3050,49 @@ mapSizeCtrl.onAdd = function() {
     mainBtn.style.textAlign = 'center';
     mainBtn.style.cursor = 'pointer';
     mainBtn.style.fontSize = '20px';
-    mainBtn.style.fontWeight = 'bold';
+    mainBtn.title = '切換地圖大小';
 
-    const list = L.DomUtil.create('div', '', container);
+    // 選單容器：改為絕對定位，避免推擠下方圖示
+    const list = L.DomUtil.create('div', '', sizeWrapper);
     list.style.display = 'none'; 
-    list.style.flexDirection = 'row';
+    list.style.position = 'absolute';
+    list.style.left = '34px'; // 彈出在按鈕右側
+    list.style.top = '0';
     list.style.backgroundColor = 'white';
-
-    const allOptions = [
-        { label: '標準', val: 'standard' },
-        { label: '大圖', val: 'large' },
-        { label: '全螢幕', val: 'full' }
-    ];
+    list.style.border = '1px solid #ccc';
+    list.style.borderRadius = '4px';
+    list.style.boxShadow = '2px 2px 5px rgba(0,0,0,0.2)';
+    list.style.flexDirection = 'row';
+    list.style.zIndex = '1000';
 
     function updateList() {
         list.innerHTML = ''; 
-        // 判斷當前是否在全螢幕 (包含 iPhone 虛擬全螢幕)
-        const isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
-        const isIphoneFS = document.body.classList.contains('iphone-fullscreen');
-        const isCurrentlyFull = isFS || isIphoneFS;
-
-        // 當前非全螢幕下的尺寸
+        const isFS = !!(document.fullscreenElement || document.webkitFullscreenElement || document.body.classList.contains('iphone-fullscreen'));
         const currentSize = window.currentMapSize || 'standard';
+        
+        const allOptions = [
+            { label: '標準', val: 'standard' },
+            { label: '大圖', val: 'large' },
+            { label: '全螢幕', val: 'full' }
+        ];
 
         allOptions.forEach((opt) => {
-            // 邏輯控制：
-            // 1. 如果目前是全螢幕，不要顯示「全螢幕」按鈕
-            if (isCurrentlyFull && opt.val === 'full') return;
-            // 2. 如果目前不是全螢幕，隱藏「目前正在使用的尺寸」
-            if (!isCurrentlyFull && opt.val === currentSize) return;
-
+            if (isFS && opt.val === 'full') return;
+            if (!isFS && opt.val === currentSize) return;
             const item = L.DomUtil.create('div', '', list);
             item.innerHTML = opt.label;
             item.style.padding = '0 12px';
             item.style.fontSize = '13px';
             item.style.lineHeight = '30px';
             item.style.cursor = 'pointer';
-            item.style.borderLeft = '1px solid #eee';
             item.style.whiteSpace = 'nowrap';
+            if (list.children.length > 1) item.style.borderLeft = '1px solid #eee';
 
             L.DomEvent.on(item, 'click', function(e) {
                 L.DomEvent.stop(e);
-                
-                if (opt.val === 'full') {
-                    window.toggleFullScreen();
-                } else {
-                    // 如果點擊的是標準或大圖，且目前正在全螢幕，必須先退出全螢幕
-                    if (isCurrentlyFull) {
-                        window.toggleFullScreen(); // 這會切換狀態並移除 class
-                    }
-                    // 執行切換尺寸
+                if (opt.val === 'full') window.toggleFullScreen();
+                else {
+                    if (isFS) window.toggleFullScreen();
                     window.changeMapSize(opt.val);
                 }
                 list.style.display = 'none'; 
@@ -3106,12 +3103,41 @@ mapSizeCtrl.onAdd = function() {
     L.DomEvent.on(mainBtn, 'click', function(e) {
         L.DomEvent.stop(e);
         const isHidden = list.style.display === 'none';
-        if (isHidden) {
-            updateList(); 
-            list.style.display = 'flex';
+        list.style.display = isHidden ? 'flex' : 'none';
+        if (isHidden) updateList();
+    });
+
+    // --- 2. Scroll Bar 開關 (強化示意圖) ---
+    const barBtnWrapper = L.DomUtil.create('div', 'leaflet-bar', container);
+    barBtnWrapper.style.backgroundColor = 'white';
+    barBtnWrapper.style.border = '1px solid #ccc';
+    barBtnWrapper.style.cursor = 'pointer';
+    barBtnWrapper.style.width = '30px'; // 強制固定寬度
+    barBtnWrapper.style.height = '30px';
+    barBtnWrapper.title = '顯示/隱藏軌跡進度軸';
+
+    const barToggleBtn = L.DomUtil.create('div', '', barBtnWrapper);
+    // 使用 linear_scale 搭配旋轉，更像滑軌與圓球
+    barToggleBtn.innerHTML = '<span class="material-icons" style="font-size:20px; line-height:30px; display:block;">linear_scale</span>';
+    barToggleBtn.style.textAlign = 'center';
+
+    function refreshBarBtnStyle() {
+        if (window.manualShowBar) {
+            barToggleBtn.style.color = '#1a73e8';
+            barToggleBtn.style.backgroundColor = '#e8f0fe';
         } else {
-            list.style.display = 'none';
+            barToggleBtn.style.color = '#666';
+            barToggleBtn.style.backgroundColor = 'white';
         }
+    }
+    
+    refreshBarBtnStyle();
+
+    L.DomEvent.on(barToggleBtn, 'click', function(e) {
+        L.DomEvent.stop(e);
+        window.manualShowBar = !window.manualShowBar;
+        refreshBarBtnStyle();
+        if (window.updateVisibility) window.updateVisibility();
     });
 
     L.DomEvent.disableClickPropagation(container);
