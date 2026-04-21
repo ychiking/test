@@ -785,34 +785,32 @@ function setupProgressBar() {
     if (fsCheckbox) fsCheckbox.addEventListener('change', (e) => handleCheckboxChange(e.target.checked));
 
     window.updateVisibility = () => {
-        const barContainer = document.getElementById("map-control-bar");
-        const mapDiv = document.getElementById('map');
-        if (!barContainer || !mapDiv) return;
+    const barContainer = document.getElementById("map-control-bar");
+    if (!barContainer) return;
 
-        const isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
-        const isIphoneFS = document.body.classList.contains('iphone-fullscreen');
+    const isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    const isIphoneFS = document.body.classList.contains('iphone-fullscreen');
+    const isLandscape = window.innerWidth > window.innerHeight && window.innerHeight < 500;
+    const mapDiv = document.getElementById('map');
+    const isResized = mapDiv.offsetHeight > 450; 
+    
+    const hasTracks = (typeof trackPoints !== 'undefined' && trackPoints && trackPoints.length > 0);
+    
+    if (hasTracks && (isFS || isIphoneFS || isResized)) {
+        barContainer.style.setProperty('display', 'flex', 'important');
         
-        // 判斷高度是否為非標準 (數值判斷最準確)
-        const isResized = mapDiv.offsetHeight > 530; 
-
-        // 條件：必須有航跡 且 (全螢幕 或 地圖調整大小)
-        const hasTracks = (typeof trackPoints !== 'undefined' && trackPoints && trackPoints.length > 0);
-        
-        if (hasTracks && (isFS || isIphoneFS || isResized)) {
-            barContainer.style.setProperty('display', 'flex', 'important');
-            
-            // 將位置再往上一點 (從 45px 調到 65px)
-            if (!(isFS || isIphoneFS)) {
-                barContainer.style.bottom = '65px'; 
-            } else {
-                barContainer.style.bottom = '100px'; 
-            }
+        // 智慧定位
+        if (isLandscape) {
+            barContainer.style.bottom = '5px'; // 橫放時最底
+        } else if (isFS || isIphoneFS) {
+            barContainer.style.bottom = '100px'; // 全螢幕時避開底部虛擬按鈕
         } else {
-            barContainer.style.setProperty('display', 'none');
-            map.closePopup(); 
-            if (typeof fsPopupTimer !== 'undefined') clearTimeout(fsPopupTimer);
+            barContainer.style.bottom = '65px'; // 直放中/大圖時避開匯入列
         }
-    };
+    } else {
+        barContainer.style.setProperty('display', 'none');
+    }
+};
 
     document.addEventListener('fullscreenchange', updateVisibility);
     document.addEventListener('webkitfullscreenchange', updateVisibility);
@@ -2956,8 +2954,9 @@ document.addEventListener('fullscreenchange', () => {
 // --- 1. 定義全域切換函式 ---
 window.changeMapSize = function(size) {
     const mapDiv = document.getElementById('map');
-    
-    // 1. 退出全螢幕狀態
+    window.currentMapSize = size; // 紀錄當前狀態
+
+    // 1. 退出全螢幕狀態邏輯
     if (document.fullscreenElement || document.webkitFullscreenElement) {
         if (document.exitFullscreen) document.exitFullscreen();
         else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
@@ -2966,32 +2965,38 @@ window.changeMapSize = function(size) {
     mapDiv.classList.remove('iphone-fullscreen');
     document.body.style.overflow = '';
 
-    // 2. 重新定義高度：確保手機上 標準 < 中圖 < 大圖
+    // 2. 重新定義高度：將原本的中圖(65vh)給標準
     const isMobile = window.innerWidth <= 768;
-    const heights = {
-        'standard': isMobile ? '45vh' : '520px', // 手機用 40vh (約 320-350px)
-        'medium': '65vh',
-        'large': '85vh'
-    };
+    const isLandscape = window.innerWidth > window.innerHeight && window.innerHeight < 500;
+    
+    let heightVal;
+    if (size === 'standard') {
+        // 標準現在使用原本中圖的比例
+        heightVal = isMobile ? '65vh' : '600px'; 
+    } else if (size === 'large') {
+        heightVal = '85vh';
+    }
 
-    if (!heights[size]) return;
-    mapDiv.style.height = heights[size];
+    if (heightVal) mapDiv.style.height = heightVal;
 
-    // 3. 解決地圖灰色與 Scroll Bar 顯示問題
+    // 3. 渲染刷新
     setTimeout(() => {
         map.invalidateSize({ animate: true });
-        map.panBy([0, 0]); 
-
-        // 呼叫 setupProgressBar 內部的顯示判斷
-        if (typeof updateVisibility === 'function') {
-            updateVisibility();
+        if (typeof window.updateVisibility === 'function') {
+            window.updateVisibility();
         }
-
-        if (size === 'large' || size === 'medium') {
+        // 如果切換到大圖，自動捲動到地圖頂端
+        if (size === 'large') {
             mapDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     }, 400); 
 };
+
+// 監聽轉向事件：防止轉向後地圖破圖
+window.addEventListener('resize', () => {
+    map.invalidateSize();
+    if (typeof window.updateVisibility === 'function') window.updateVisibility();
+});
 
 window.toggleFullScreen = function() {
     const mapDiv = document.getElementById('map');
@@ -3040,55 +3045,73 @@ mapSizeCtrl.onAdd = function() {
     mainBtn.style.lineHeight = '30px';
     mainBtn.style.textAlign = 'center';
     mainBtn.style.cursor = 'pointer';
-    mainBtn.style.fontSize = '22px';
+    mainBtn.style.fontSize = '20px';
     mainBtn.style.fontWeight = 'bold';
-    mainBtn.title = '地圖大小切換';
 
     const list = L.DomUtil.create('div', '', container);
     list.style.display = 'none'; 
     list.style.flexDirection = 'row';
     list.style.backgroundColor = 'white';
 
-    const options = [
+    const allOptions = [
         { label: '標準', val: 'standard' },
-        { label: '中圖', val: 'medium' },
         { label: '大圖', val: 'large' },
         { label: '全螢幕', val: 'full' }
     ];
 
-    options.forEach((opt) => {
-        const item = L.DomUtil.create('div', '', list);
-        item.innerHTML = opt.label;
-        item.style.padding = '0 12px';
-        item.style.fontSize = '13px';
-        item.style.lineHeight = '30px';
-        item.style.cursor = 'pointer';
-        item.style.borderLeft = '1px solid #eee';
+    function updateList() {
+        list.innerHTML = ''; 
+        // 判斷當前是否在全螢幕 (包含 iPhone 虛擬全螢幕)
+        const isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+        const isIphoneFS = document.body.classList.contains('iphone-fullscreen');
+        const isCurrentlyFull = isFS || isIphoneFS;
 
-        L.DomEvent.on(item, 'click', function(e) {
-            L.DomEvent.stop(e);
-            if (opt.val === 'full') {
-                // 優先使用全域定義的 toggleFullScreen
-                if (typeof window.toggleFullScreen === 'function') {
+        // 當前非全螢幕下的尺寸
+        const currentSize = window.currentMapSize || 'standard';
+
+        allOptions.forEach((opt) => {
+            // 邏輯控制：
+            // 1. 如果目前是全螢幕，不要顯示「全螢幕」按鈕
+            if (isCurrentlyFull && opt.val === 'full') return;
+            // 2. 如果目前不是全螢幕，隱藏「目前正在使用的尺寸」
+            if (!isCurrentlyFull && opt.val === currentSize) return;
+
+            const item = L.DomUtil.create('div', '', list);
+            item.innerHTML = opt.label;
+            item.style.padding = '0 12px';
+            item.style.fontSize = '13px';
+            item.style.lineHeight = '30px';
+            item.style.cursor = 'pointer';
+            item.style.borderLeft = '1px solid #eee';
+            item.style.whiteSpace = 'nowrap';
+
+            L.DomEvent.on(item, 'click', function(e) {
+                L.DomEvent.stop(e);
+                
+                if (opt.val === 'full') {
                     window.toggleFullScreen();
-                } else if (typeof toggleFullScreen === 'function') {
-                    toggleFullScreen();
                 } else {
-                    // 備用方案：直接對 map 元件下指令
-                    const mapEl = document.getElementById('map');
-                    if (mapEl.requestFullscreen) mapEl.requestFullscreen();
+                    // 如果點擊的是標準或大圖，且目前正在全螢幕，必須先退出全螢幕
+                    if (isCurrentlyFull) {
+                        window.toggleFullScreen(); // 這會切換狀態並移除 class
+                    }
+                    // 執行切換尺寸
+                    window.changeMapSize(opt.val);
                 }
-            } else {
-                window.changeMapSize(opt.val);
-            }
-            list.style.display = 'none'; 
+                list.style.display = 'none'; 
+            });
         });
-    });
+    }
 
     L.DomEvent.on(mainBtn, 'click', function(e) {
         L.DomEvent.stop(e);
         const isHidden = list.style.display === 'none';
-        list.style.display = isHidden ? 'flex' : 'none';
+        if (isHidden) {
+            updateList(); 
+            list.style.display = 'flex';
+        } else {
+            list.style.display = 'none';
+        }
     });
 
     L.DomEvent.disableClickPropagation(container);

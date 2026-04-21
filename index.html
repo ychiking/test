@@ -503,6 +503,36 @@
       #chartContainer { height: 220px; }
     }
     
+    @media screen and (max-height: 500px) and (orientation: landscape) {
+    #map {
+        height: 70vh !important; /* 橫向時給予更多比例 */
+    }
+
+    #header {
+        padding: 2px 14px; /* 縮減標題欄高度 */
+    }
+
+    .upload-row {
+        transform: scale(0.9); /* 縮小一點點上傳按鈕 */
+        transform-origin: left;
+    }
+
+    /* 橫向時垂直空間極小，將進度條壓到最底部 */
+    #map-control-bar {
+        bottom: 5px !important;
+        width: 95% !important;
+        height: 35px !important;
+        background: rgba(255, 255, 255, 0.95);
+    }
+
+    /* 隱藏指北針或縮小它，避免擋住地圖 */
+    .map-compass {
+        transform: scale(0.7);
+        bottom: 5px !important;
+        left: -10px !important;
+    }
+}
+    
  .iphone-fullscreen #map-control-bar {
     display: flex !important;
     z-index: 20000 !important;
