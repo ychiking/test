@@ -2955,33 +2955,69 @@ document.addEventListener('fullscreenchange', () => {
 
 // --- 1. 定義全域切換函式 ---
 window.changeMapSize = function(size) {
-    // 切換回標準或中大圖時，若在全螢幕則先退出
+    const mapDiv = document.getElementById('map');
+    
+    // 1. 退出所有全螢幕狀態
     if (document.fullscreenElement || document.webkitFullscreenElement) {
         if (document.exitFullscreen) document.exitFullscreen();
         else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
     }
-    document.getElementById('map').classList.remove('iphone-fullscreen');
+    document.body.classList.remove('iphone-fullscreen');
+    mapDiv.classList.remove('iphone-fullscreen');
     document.body.style.overflow = '';
 
-    const mapDiv = document.getElementById('map');
-    const heights = { 'standard': '520px', 'medium': '60vh', 'large': '85vh' };
-    if (!heights[size]) return;
+    // 2. 重新定義高度 (解決手機版標準比中圖大的問題)
+    const isMobile = window.innerWidth <= 768;
+    const heights = {
+        'standard': isMobile ? '40vh' : '520px', // 手機改用 vh，電腦維持 px
+        'medium': '65vh',
+        'large': '85vh'
+    };
 
+    if (!heights[size]) return;
     mapDiv.style.height = heights[size];
 
+    // 3. 刷新地圖與進度條
     setTimeout(() => {
         map.invalidateSize({ animate: true });
-        map.panBy([0, 0]); // 解決灰色塊問題
+        map.panBy([0, 0]); 
 
-        // 主動觸發進度條顯示判斷
-        if (typeof window.updateVisibility === 'function') {
-            window.updateVisibility();
-        }
+        if (window.updateVisibility) window.updateVisibility();
 
         if (size === 'large' || size === 'medium') {
             mapDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
-    }, 400); 
+    }, 400);
+};
+
+window.toggleFullScreen = function() {
+    const mapDiv = document.getElementById('map');
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+    if (isIOS) {
+        // iPhone 使用虛擬全螢幕
+        const isFull = mapDiv.classList.contains('iphone-fullscreen');
+        if (!isFull) {
+            mapDiv.classList.add('iphone-fullscreen');
+            document.body.style.overflow = 'hidden'; // 防止背景捲動
+        } else {
+            mapDiv.classList.remove('iphone-fullscreen');
+            document.body.style.overflow = '';
+        }
+    } else {
+        // Android / PC 使用原生 API
+        if (!document.fullscreenElement) {
+            if (mapDiv.requestFullscreen) mapDiv.requestFullscreen();
+        } else {
+            document.exitFullscreen();
+        }
+    }
+    
+    // 切換後刷新進度條與地圖
+    setTimeout(() => {
+        map.invalidateSize();
+        if (window.updateVisibility) window.updateVisibility();
+    }, 300);
 };
 
 // --- 控制按鈕組 (左上角) ---
