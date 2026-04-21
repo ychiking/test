@@ -2719,13 +2719,13 @@ function renderMultiGpxButtons() {
     const bar = document.getElementById('multiGpxBtnBar');
     if (!bar) return;
 
-		if (multiGpxStack && multiGpxStack.length > 0) {
+    if (multiGpxStack && multiGpxStack.length > 0) {
         document.body.classList.add('has-gpx-bar');
     } else {
         document.body.classList.remove('has-gpx-bar');
     }
 
-    bar.innerHTML = ''; // 先清空
+    bar.innerHTML = ''; 
     
     const closeBtn = document.createElement('button');
     closeBtn.className = 'gpx-file-btn close-btn';
@@ -2748,7 +2748,13 @@ function renderMultiGpxButtons() {
             : gpx.name;
 
         btn.setAttribute('title', gpx.name); 
+
+        // 1. 設定左側的邊框顏色 (你原本的邏輯)
         btn.style.borderLeft = `5px solid ${gpx.color}`;
+        
+        // 2. 關鍵修正：透過 CSS 變數將 GPX 顏色傳遞給 CSS
+        // 這樣我們可以在 CSS 裡用 var(--track-color) 來取代原本死板的紅色
+        btn.style.setProperty('--track-color', gpx.color);
         
         btn.onclick = (e) => {
             if (e) L.DomEvent.stopPropagation(e);
