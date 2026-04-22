@@ -566,12 +566,51 @@
     border: 3px solid white;
     box-shadow: 0 2px 6px rgba(0,0,0,0.4);
 }
+
+/* 自定義地圖按鈕樣式，模仿 Leaflet 原生風格但更精緻 */
+.custom-map-control {
+    background: white;
+    border: 2px solid rgba(0,0,0,0.2);
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.custom-map-control button {
+    width: 30px;
+    height: 30px;
+    background: white;
+    border: none;
+    border-bottom: 1px solid #ccc;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    color: #444;
+}
+
+.custom-map-control button:last-child {
+    border-bottom: none;
+}
+
+.custom-map-control button:hover {
+    background-color: #f4f4f4;
+}
+
+
+/* 固定斜向角度：左下往斜上 + 右上往斜下 */
+.slant-icon {
+    display: inline-block;
+    transform: rotate(45deg);
+}
   </style>
 </head>
 
 <body>
   <div id="header">
-    <strong style="font-size: 12px; color: #333;">YCHiking-GPX 路線檢視工具 v2604215</strong>
+    <strong style="font-size: 12px; color: #333;">YCHiking-GPX 路線檢視工具 v2604221</strong>
     <div class="upload-row">
       <input type="file" id="gpxInput" accept=".gpx" style="display: none;" />
       <input type="file" id="multiGpxInput" accept=".gpx" multiple style="display: none;" />

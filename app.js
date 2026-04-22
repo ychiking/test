@@ -1,5 +1,5 @@
 // ================= 地圖初始化 =================
-const map = L.map("map", { tap: true }).setView([25.03, 121.56], 12);
+const map = L.map("map", { tap: true, zoomControl: false }).setView([25.03, 121.56], 12);
 const osm = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap" }).addTo(map);
 const otm = L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", { maxZoom: 18, maxNativeZoom: 17, attribution: 'OpenTopoMap' });
 // Happyman（當底圖）
@@ -60,9 +60,11 @@ const overlayMaps = {
 
 L.control.layers(baseMaps, overlayMaps).addTo(map);
 
-happyman.addTo(map);
+//happyman.addTo(map);
 rudy.addTo(map);
 map.on('overlayadd', updateGrids);
+
+
 
 let allTracks = [], trackPoints = [], polyline, hoverMarker, chart, markers = [], wptMarkers = [];
 let pointA = null, pointB = null, markerA = null, markerB = null;
@@ -838,6 +840,19 @@ function setupProgressBar() {
         }
         document.getElementById("progressBarInfo").textContent = `${p.distance.toFixed(2)} km`;
         
+        if (chart) { // 使用您的全域變數 chart
+            const meta = chart.getDatasetMeta(0);
+            const point = meta.data[idx];
+            if (point) {
+                chart.setActiveElements([{ datasetIndex: 0, index: idx }]);
+                chart.tooltip.setActiveElements(
+                    [{ datasetIndex: 0, index: idx }],
+                    { x: point.x, y: point.y }
+                );
+                chart.update('none'); // 使用 'none' 模式確保拖動流暢不卡頓
+            }
+        }
+        
         // 拖移時判斷
         const isChecked = fsCheckbox ? fsCheckbox.checked : (mainCheckbox ? mainCheckbox.checked : true);
         if (typeof showCustomPopup === 'function') {
@@ -991,14 +1006,50 @@ function loadRoute(index, customColor = null) {
         polyline.on('click', (e) => {
             L.DomEvent.stopPropagation(e);
             let minD = Infinity, idx = 0;
+            
+            // 1. 找出距離點擊位置最近的軌跡點索引
             trackPoints.forEach((p, pIdx) => {
                 const d = Math.sqrt((p.lat - e.latlng.lat)**2 + (p.lon - e.latlng.lng)**2);
                 if (d < minD) { minD = d; idx = pIdx; }
             });
+            
+            // 2. 判斷點擊距離（約 15 公尺內觸發）
             if (minD * 111000 <= 15) {
-                if (!hoverMarker) hoverMarker = L.circleMarker([0,0], {radius: 7, color: 'yellow', fillOpacity: 1}).addTo(map);
-                hoverMarker.setLatLng([trackPoints[idx].lat, trackPoints[idx].lon]);
-                showCustomPopup(idx, "位置資訊");
+                // --- A. 同步進度軸 (ProgressBar) ---
+                const progressBar = document.getElementById('gpxProgressBar'); // 使用您程式碼中的 ID
+                if (progressBar) {
+                    progressBar.value = idx;
+                    // 重要：手動觸發 input 事件，讓 setupProgressBar 裡的監聽器執行（移動地圖標記、更新距離文字）
+                    const inputEvent = new Event('input', { bubbles: true });
+                    progressBar.dispatchEvent(inputEvent);
+                }
+
+                // --- B. 同步高度表 (Elevation Chart) ---
+                if (chart) { // 您 drawElevationChart 使用的是全域變數 chart
+                    const meta = chart.getDatasetMeta(0);
+                    const point = meta.data[idx];
+                    
+                    if (point) {
+                        // 模擬 Chart.js 的 Active 狀態與 Tooltip
+                        chart.setActiveElements([{ datasetIndex: 0, index: idx }]);
+                        chart.tooltip.setActiveElements(
+                            [{ datasetIndex: 0, index: idx }],
+                            { x: point.x, y: point.y }
+                        );
+                        chart.update('none'); // 使用 'none' 模式避免多餘動畫
+                    }
+                }
+
+                // --- C. 地圖指示點與彈窗 (您的原始邏輯) ---
+                if (!hoverMarker) {
+                    hoverMarker = L.circleMarker([0,0], {radius: 7, color: 'yellow', fillOpacity: 1}).addTo(map);
+                }
+                hoverMarker.setLatLng([trackPoints[idx].lat, trackPoints[idx].lon]).bringToFront();
+                
+                // 呼叫您定義的彈窗函式
+                if (typeof showCustomPopup === 'function') {
+                    showCustomPopup(idx, "位置資訊");
+                }
             }
         });
 
@@ -1572,6 +1623,14 @@ function drawElevationChart() {
         const idx = points[0].index;
         const p = trackPoints[idx];
         window.lastHoverIdx = idx;
+        
+        const progressBar = document.getElementById("gpxProgressBar");
+            if (progressBar) {
+                progressBar.value = idx;
+                // 同步更新旁邊的距離文字
+                const info = document.getElementById("progressBarInfo");
+                if (info) info.textContent = `${p.distance.toFixed(2)} km`;
+            }
 
         // 1. 位置資訊顯示邏輯
         const checkbox = document.getElementById("showChartTipCheckbox");
@@ -3006,192 +3065,168 @@ window.addEventListener('resize', () => {
     if (typeof window.updateVisibility === 'function') window.updateVisibility();
 });
 
-window.toggleFullScreen = function() {
-    const mapDiv = document.getElementById('map');
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
-    if (isIOS) {
-        const isFull = mapDiv.classList.contains('iphone-fullscreen');
-        if (!isFull) {
-            mapDiv.classList.add('iphone-fullscreen');
-            document.body.classList.add('iphone-fullscreen'); // 確保 body 也有 class
+// ================= 地圖尺寸與全螢幕控制邏輯 =================
+
+let currentMapMode = 'standard'; 
+window.manualShowBar = false; // 軌跡進度軸開關狀態
+
+// 1. 核心模式切換函式 (支援 iPhone)
+function changeMode(mode) {
+    currentMapMode = mode;
+    const mDiv = document.getElementById('map');
+    
+    // 清理 iPhone 全螢幕狀態
+    document.body.classList.remove('iphone-fullscreen');
+    document.body.style.overflow = '';
+    
+    if (mode === 'standard') {
+        exitNativeFullscreen();
+        mDiv.style.height = '500px'; 
+    } 
+    else if (mode === 'large') {
+        exitNativeFullscreen();
+        mDiv.style.height = '85vh';
+    } 
+    else if (mode === 'fullscreen') {
+        if (mDiv.requestFullscreen) {
+            mDiv.requestFullscreen();
+        } else if (mDiv.webkitRequestFullscreen) {
+            mDiv.webkitRequestFullscreen();
+        } else {
+            // iPhone 專用偽全螢幕
+            document.body.classList.add('iphone-fullscreen');
             document.body.style.overflow = 'hidden';
-            window.currentMapSize = 'full'; // 強制同步狀態
-        } else {
-            mapDiv.classList.remove('iphone-fullscreen');
-            document.body.classList.remove('iphone-fullscreen');
-            document.body.style.overflow = '';
-            window.currentMapSize = 'standard'; // 退出時預設回歸標準
-        }
-    } else {
-        // Android / PC 邏輯維持...
-        if (!document.fullscreenElement) {
-            if (mapDiv.requestFullscreen) mapDiv.requestFullscreen();
-            window.currentMapSize = 'full';
-        } else {
-            document.exitFullscreen();
-            window.currentMapSize = 'standard';
+            window.scrollTo(0, 0); 
         }
     }
     
+    // 通知 Leaflet 重新計算尺寸
     setTimeout(() => {
-        map.invalidateSize();
-        if (window.updateVisibility) window.updateVisibility();
-    }, 300);
-};
-
-window.manualShowBar = false; 
-
-const mapSizeCtrl = L.control({ position: 'topleft' });
-
-mapSizeCtrl.onAdd = function() {
-    const container = L.DomUtil.create('div', 'leaflet-control-group');
-    container.style.display = 'flex';
-    container.style.flexDirection = 'column';
-    container.style.gap = '8px';
-
-    // --- 1. 地圖大小控制組 ---
-    const sizeWrapper = L.DomUtil.create('div', 'leaflet-bar', container);
-    sizeWrapper.style.backgroundColor = 'white';
-    sizeWrapper.style.display = 'block'; // 改為 block
-    sizeWrapper.style.position = 'relative'; 
-
-    const mainBtn = L.DomUtil.create('div', '', sizeWrapper);
-    mainBtn.innerHTML = '⛶';
-    mainBtn.style.width = '30px';
-    mainBtn.style.height = '30px';
-    mainBtn.style.lineHeight = '30px';
-    mainBtn.style.textAlign = 'center';
-    mainBtn.style.cursor = 'pointer';
-    mainBtn.style.fontSize = '20px';
-    mainBtn.title = '切換地圖大小';
-
-    // 選單容器：改為絕對定位，避免推擠下方圖示
-    const list = L.DomUtil.create('div', '', sizeWrapper);
-    list.style.display = 'none'; 
-    list.style.position = 'absolute';
-    list.style.left = '34px'; // 彈出在按鈕右側
-    list.style.top = '0';
-    list.style.backgroundColor = 'white';
-    list.style.border = '1px solid #ccc';
-    list.style.borderRadius = '4px';
-    list.style.boxShadow = '2px 2px 5px rgba(0,0,0,0.2)';
-    list.style.flexDirection = 'row';
-    list.style.zIndex = '1000';
-    
-    // --- 點擊地圖其他地方，關閉選單 ---
-		map.on('click', function() {
-		    if (list.style.display === 'flex') {
-		        list.style.display = 'none';
-		    }
-		});
-
-		// 為了確保手機端觸控也能正常反應，可以額外增加一個事件（選配）
-		map.on('movestart', function() {
-		    if (list.style.display === 'flex') {
-		        list.style.display = 'none';
-		    }
-		});
-
-    function updateList() {
-    list.innerHTML = ''; 
-    
-    // 重新抓取即時狀態
-    const isIphoneFS = document.body.classList.contains('iphone-fullscreen') || 
-                       document.getElementById('map').classList.contains('iphone-fullscreen');
-    const isNativeFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
-    
-    // 只要其中一個成立，就是全螢幕
-    const isCurrentlyFull = isIphoneFS || isNativeFS;
-
-    // 取得當前尺寸
-    const currentSize = window.currentMapSize || 'standard';
-    
-    const allOptions = [
-        { label: '標準', val: 'standard' },
-        { label: '大圖', val: 'large' },
-        { label: '全螢幕', val: 'full' }
-    ];
-
-    allOptions.forEach((opt) => {
-        // --- 修正後的過濾邏輯 ---
-        if (isCurrentlyFull) {
-            // 在全螢幕下，絕對不顯示「全螢幕」按鈕
-            if (opt.val === 'full') return;
-        } else {
-            // 在一般模式下，不顯示當前尺寸
-            if (opt.val === currentSize) return;
+        if (typeof map !== 'undefined') {
+            map.invalidateSize();
+            if (window.updateVisibility) window.updateVisibility();
         }
-
-        const item = L.DomUtil.create('div', '', list);
-        item.innerHTML = opt.label;
-        // ... (樣式代碼不變)
-        item.style.padding = '0 12px';
-        item.style.fontSize = '13px';
-        item.style.lineHeight = '30px';
-        item.style.cursor = 'pointer';
-        item.style.whiteSpace = 'nowrap';
-        if (list.children.length > 1) item.style.borderLeft = '1px solid #eee';
-
-        L.DomEvent.on(item, 'click', function(e) {
-            L.DomEvent.stop(e);
-            if (opt.val === 'full') {
-                window.toggleFullScreen();
-            } else {
-                if (isCurrentlyFull) {
-                    window.toggleFullScreen(); // 這裡會幫我們把狀態設回標準
-                    setTimeout(() => { window.changeMapSize(opt.val); }, 350);
-                } else {
-                    window.changeMapSize(opt.val);
-                }
-            }
-            list.style.display = 'none'; 
-        });
-    });
+    }, 300);
 }
 
-    L.DomEvent.on(mainBtn, 'click', function(e) {
-        L.DomEvent.stop(e);
-        const isHidden = list.style.display === 'none';
-        list.style.display = isHidden ? 'flex' : 'none';
-        if (isHidden) updateList();
-    });
-
-    // --- 2. Scroll Bar 開關 (強化示意圖) ---
-    const barBtnWrapper = L.DomUtil.create('div', 'leaflet-bar', container);
-    barBtnWrapper.style.backgroundColor = 'white';
-    barBtnWrapper.style.border = '1px solid #ccc';
-    barBtnWrapper.style.cursor = 'pointer';
-    barBtnWrapper.style.width = '30px'; // 強制固定寬度
-    barBtnWrapper.style.height = '30px';
-    barBtnWrapper.title = '顯示/隱藏軌跡進度軸';
-
-    const barToggleBtn = L.DomUtil.create('div', '', barBtnWrapper);
-    // 使用 linear_scale 搭配旋轉，更像滑軌與圓球
-    barToggleBtn.innerHTML = '<span class="material-icons" style="font-size:20px; line-height:30px; display:block;">linear_scale</span>';
-    barToggleBtn.style.textAlign = 'center';
-
-    function refreshBarBtnStyle() {
-        if (window.manualShowBar) {
-            barToggleBtn.style.color = '#1a73e8';
-            barToggleBtn.style.backgroundColor = '#e8f0fe';
-        } else {
-            barToggleBtn.style.color = '#666';
-            barToggleBtn.style.backgroundColor = 'white';
-        }
+function exitNativeFullscreen() {
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+        if (document.exitFullscreen) document.exitFullscreen();
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
     }
-    
-    refreshBarBtnStyle();
+}
 
-    L.DomEvent.on(barToggleBtn, 'click', function(e) {
-        L.DomEvent.stop(e);
-        window.manualShowBar = !window.manualShowBar;
-        refreshBarBtnStyle();
-        if (window.updateVisibility) window.updateVisibility();
-    });
+// 2. 自定義 Leaflet 控制項 (雙按鈕模式 + 進度軸開關)
+const ModeSwitchControl = L.Control.extend({
+    options: { position: 'topleft' },
+    onAdd: function(map) {
+        const container = L.DomUtil.create('div', 'leaflet-control-group');
+        container.style.display = 'flex';
+        container.style.flexDirection = 'column';
+        container.style.gap = '8px';
 
-    L.DomEvent.disableClickPropagation(container);
-    return container;
+        // --- 地圖尺寸切換組 ---
+        const sizeBar = L.DomUtil.create('div', 'leaflet-bar custom-map-control', container);
+        sizeBar.style.backgroundColor = 'white';
+        this._sizeBar = sizeBar;
+
+        // --- 軌跡進度軸開關組 ---
+        const barWrapper = L.DomUtil.create('div', 'leaflet-bar', container);
+        barWrapper.style.backgroundColor = 'white';
+        barWrapper.style.cursor = 'pointer';
+        barWrapper.title = '顯示/隱藏軌跡進度軸';
+        
+        const barBtn = L.DomUtil.create('a', '', barWrapper);
+        barBtn.style.width = '30px';
+        barBtn.style.height = '30px';
+        barBtn.style.display = 'flex';
+        barBtn.style.alignItems = 'center';
+        barBtn.style.justifyContent = 'center';
+        barBtn.innerHTML = '<span class="material-icons" style="font-size:20px;">linear_scale</span>';
+
+        L.DomEvent.on(barBtn, 'click', (e) => {
+            L.DomEvent.stopPropagation(e);
+            window.manualShowBar = !window.manualShowBar;
+            this.updateBarButtonStyle(barBtn);
+            if (window.updateVisibility) window.updateVisibility();
+        });
+
+        this._barBtn = barBtn;
+        this.updateBarButtonStyle(barBtn);
+        this.updateButtons();
+        
+        L.DomEvent.disableClickPropagation(container);
+        return container;
+    },
+
+    updateBarButtonStyle: function(btn) {
+        if (window.manualShowBar) {
+            btn.style.color = '#1a73e8';
+            btn.style.backgroundColor = '#e8f0fe';
+        } else {
+            btn.style.color = '#666';
+            btn.style.backgroundColor = 'white';
+        }
+    },
+
+    updateButtons: function() {
+        const container = this._sizeBar;
+        container.innerHTML = '';
+
+        const modes = {
+            standard: { label: '標準', icon: 'unfold_less', isSlant: true, action: () => changeMode('standard') },
+            large: { 
+                label: '大圖', 
+                icon: currentMapMode === 'fullscreen' ? 'fullscreen_exit' : 'unfold_more', 
+                isSlant: currentMapMode === 'fullscreen' ? false : true,
+                action: () => changeMode('large') 
+            },
+            fullscreen: { label: '全螢幕', icon: 'fullscreen', isSlant: false, action: () => changeMode('fullscreen') }
+        };
+
+        let btnConfigs = [];
+        if (currentMapMode === 'standard') btnConfigs = [modes.large, modes.fullscreen];
+        else if (currentMapMode === 'large') btnConfigs = [modes.standard, modes.fullscreen];
+        else if (currentMapMode === 'fullscreen') btnConfigs = [modes.standard, modes.large];
+
+        btnConfigs.forEach((config, index) => {
+            const btn = L.DomUtil.create('a', '', container);
+            btn.href = '#';
+            btn.title = config.label;
+            btn.style.width = '30px';
+            btn.style.height = '30px';
+            btn.style.display = 'flex';
+            btn.style.alignItems = 'center';
+            btn.style.justifyContent = 'center';
+            if (index === 0) btn.style.borderBottom = '1px solid #ccc';
+
+            btn.innerHTML = `<span class="material-icons ${config.isSlant ? 'slant-icon' : ''}" style="font-size:26px;">${config.icon}</span>`;
+
+            L.DomEvent.on(btn, 'click', (e) => {
+                L.DomEvent.stopPropagation(e);
+                L.DomEvent.preventDefault(e);
+                config.action();
+                this.updateButtons(); 
+            });
+        });
+    }
+});
+
+// 3. 實例化控制項並監聽系統全螢幕切換
+const modeControl = new ModeSwitchControl();
+modeControl.addTo(map);
+
+// 監聽 Esc 鍵退出全螢幕時，同步更新按鈕狀態
+const syncFsStatus = () => {
+    const isFS = !!(document.fullscreenElement || document.webkitFullscreenElement || document.body.classList.contains('iphone-fullscreen'));
+    if (!isFS && currentMapMode === 'fullscreen') {
+        currentMapMode = 'standard';
+        document.getElementById('map').style.height = '500px';
+    }
+    modeControl.updateButtons();
+    map.invalidateSize();
 };
 
-mapSizeCtrl.addTo(map);
+document.addEventListener('fullscreenchange', syncFsStatus);
+document.addEventListener('webkitfullscreenchange', syncFsStatus);
