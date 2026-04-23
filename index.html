@@ -292,7 +292,7 @@
 		.iphone-fullscreen #routeInfo,
 		.iphone-fullscreen #toggleChartBtn,
 		.iphone-fullscreen #chartContainer {
-    display: none !important;
+      display: none !important;
 		}
     
     .iphone-fullscreen #multiGpxBtnBar {
@@ -439,9 +439,26 @@
       cursor: pointer;
     }
 
-    .gpx-file-btn.close-btn:hover {
-      background: rgba(255, 77, 77, 0.2);
+    /* 新增：匯出按鈕樣式 */
+    .gpx-file-btn.export-btn {
+      flex: 0 0 auto !important;
+      border: 1px solid #4CAF50 !important;
+      color: #4CAF50 !important;
+      background: transparent !important;
+      margin: 6px 2px 6px 5px !important;
+      height: 28px !important;
+      display: inline-flex !important;
+      align-items: center;
+      justify-content: center;
+      border-radius: 20px !important;
+      padding: 0 10px !important;
+      font-size: 13px !important;
+      white-space: nowrap;
+      cursor: pointer;
     }
+
+    .gpx-file-btn.close-btn:hover { background: rgba(255, 77, 77, 0.2); }
+    .gpx-file-btn.export-btn:hover { background: rgba(76, 175, 80, 0.2); }
 
     /* 邊界元件偏移 */
     body.has-gpx-bar .leaflet-bottom.leaflet-right {
@@ -505,6 +522,17 @@
       line-height: 1;
     }
 
+    /* 列表操作圖示 */
+    .wpt-action-icon {
+        font-size: 18px !important;
+        vertical-align: middle;
+        cursor: pointer;
+        margin-left: 5px;
+        color: #666;
+    }
+    .wpt-action-icon:hover { color: #1a73e8; }
+    .wpt-delete-icon:hover { color: #d93025; }
+
     @media (max-width: 768px) {
       #map { height: 45vh; }
       #chartContainer { height: 220px; }
@@ -512,27 +540,21 @@
     
     @media screen and (max-height: 500px) and (orientation: landscape) {
     #map {
-        height: 70vh !important; /* 橫向時給予更多比例 */
+        height: 70vh !important; 
     }
-
     #header {
-        padding: 2px 14px; /* 縮減標題欄高度 */
+        padding: 2px 14px; 
     }
-
     .upload-row {
-        transform: scale(0.9); /* 縮小一點點上傳按鈕 */
+        transform: scale(0.9); 
         transform-origin: left;
     }
-
-    /* 橫向時垂直空間極小，將進度條壓到最底部 */
     #map-control-bar {
         bottom: 5px !important;
         width: 95% !important;
         height: 35px !important;
         background: rgba(255, 255, 255, 0.95);
     }
-
-    /* 隱藏指北針或縮小它，避免擋住地圖 */
     .map-compass {
         transform: scale(0.7);
         bottom: 5px !important;
@@ -540,20 +562,17 @@
     }
 }
     
- .iphone-fullscreen #map-control-bar {
+.iphone-fullscreen #map-control-bar {
     display: flex !important;
     z-index: 20000 !important;
     bottom: 100px !important;
     top: auto !important;
-    width: 80% !important; /* 加寬一點，確保 Checkbox 不會折行 */
+    width: 80% !important; 
     max-width: 500px;
 }
 
-
-/* 移除預設的 Zoom Control */
 .leaflet-control-zoom { display: none !important; }
 
-/* 讓地圖控制項細線化 */
 .custom-map-control {
     background: white;
     border: 1px solid rgba(0,0,0,0.2) !important;
@@ -573,16 +592,13 @@
     background: white;
 }
 
-/* 斜向圖示旋轉 */
 .slant-icon { transform: rotate(45deg); display: inline-block; }
 
-/* 讓手機更方便勾選 */
 #fs-check-group label {
     user-select: none;
     -webkit-user-select: none;
 }
 
-/* 讓滑動條在手機上更好操作 */
 #gpxProgressBar {
     -webkit-appearance: none;
     appearance: none;
@@ -593,7 +609,7 @@
 
 #gpxProgressBar::-webkit-slider-thumb {
     -webkit-appearance: none;
-    width: 22px; /* 加大按鈕讓手指好抓 */
+    width: 22px; 
     height: 22px;
     background: #1a73e8;
     border-radius: 50%;
@@ -601,13 +617,11 @@
     box-shadow: 0 2px 6px rgba(0,0,0,0.4);
 }
 
-/* 復刻預設圖示控制項外觀 */
 #gpx-manager-control a.leaflet-control-layers-toggle {
-    background-size: 26px 26px; /* 強制設定預設圖示拼合的大小 */
-    background-position: center; /* 圖示置中 */
+    background-size: 26px 26px; 
+    background-position: center; 
 }
 
-/* 如果您發現按鈕比預設的大一點，可以取消 leaflet-bar 的背景色 */
 #gpx-manager-control {
     background: none !important;
 }
@@ -616,13 +630,17 @@
 
 <body>
   <div id="header">
-    <strong style="font-size: 12px; color: #333;">YCHiking-GPX 路線檢視工具 v2604226</strong>
+    <strong style="font-size: 12px; color: #333;">YCHiking-GPX 路線檢視工具 v2604231</strong>
     <div class="upload-row">
       <input type="file" id="gpxInput" accept=".gpx" style="display: none;" />
       <input type="file" id="multiGpxInput" accept=".gpx" multiple style="display: none;" />
       <label for="multiGpxInput" class="custom-file-upload">匯入GPX</label>
       <span id="fileNameDisplay" style="font-weight:500; margin-left:5px;">尚未選擇檔案</span>
       <span id="importHint" style="font-size: 12px; color: #777; margin-left: 0px;">(支援拖拉匯入多個GPX檔)</span>
+			<span class="material-icons" 
+      style="cursor:pointer; color:#1a73e8; vertical-align: middle; margin-left: 5px;" 
+      onclick="exportGpx()" 
+      title="匯出當前GPX">file_download</span>
     </div>
     <div class="subtitle">
       <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px;">
@@ -669,7 +687,7 @@
     height: 45px; 
     background: rgba(255, 255, 255, 0.9); 
     z-index: 1000; 
-    display: none; /* 預設隱藏 */
+    display: none; 
     align-items: center; 
     padding: 0 15px; 
     border-radius: 25px; 
@@ -684,15 +702,10 @@
     </div>
 </div>
 </div>
-  </div>
-
-  <div id="routeSelectContainer" style="display: none; position: absolute; top: 10px; left: 60px; z-index: 9999;">
-    <select id="routeSelect" style="width: 120px; height: 30px; border-radius: 15px; background: white; border: 1px solid #333333;"></select>
-  </div>
 
   <div id="coordModal" class="modal-overlay">
     <div class="modal-content" onclick="event.stopPropagation()">
-      <span style="position: absolute; top: 10px; right: 15px; font-size: 28px; cursor: pointer; color: #999;" onclick="document.getElementById('coordModal').style.display='none'; clearCoordInputs();">&times;</span>
+      <span style="position: absolute; top: 10px; right: 15px; font-size: 28px; cursor: pointer; color: #999;" onclick="document.getElementById('coordModal').style.display='none'; clearCoordInputs();">×</span>
       <h2 style="color: #1a73e8; text-align: center; margin-top: 0; margin-bottom: 20px;">座標定位與轉換</h2>
       <div class="coord-section">
         <h3>WGS84 ➜ TWD97</h3>
@@ -746,19 +759,20 @@
     </div>
     <div id="wptList"></div>
   </div>
+
   <div id="gpxListModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
-  <div style="background:white; padding:20px; border-radius:8px; width:90%; max-width:400px; max-height:80vh; overflow-y:auto; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #eee; padding-bottom:10px;">
-      <h3 style="margin:0; font-size:18px;">GPX 顯示管理</h3>
-      <button onclick="closeGpxList()" style="border:none; background:none; cursor:pointer; font-size:20px; color:#999;">✕</button>
-    </div>
-    <div id="gpxItemsContainer">
+    <div style="background:white; padding:20px; border-radius:8px; width:90%; max-width:400px; max-height:80vh; overflow-y:auto; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #eee; padding-bottom:10px;">
+        <h3 style="margin:0; font-size:18px;">GPX 顯示管理</h3>
+        <button onclick="closeGpxList()" style="border:none; background:none; cursor:pointer; font-size:20px; color:#999;">✕</button>
       </div>
-    <div style="text-align:right; margin-top:15px;">
-      <button onclick="closeGpxList()" style="padding:6px 16px; background:#1a73e8; color:white; border:none; border-radius:4px; cursor:pointer;">關閉</button>
+      <div id="gpxItemsContainer"></div>
+      <div style="text-align:right; margin-top:15px;">
+        <button onclick="closeGpxList()" style="padding:6px 16px; background:#1a73e8; color:white; border:none; border-radius:4px; cursor:pointer;">關閉</button>
+      </div>
     </div>
   </div>
-</div>
+
   <script src="app.js"></script>
 </body>
 
