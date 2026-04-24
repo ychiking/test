@@ -625,12 +625,33 @@
 #gpx-manager-control {
     background: none !important;
 }
+
+.wpt-modal-overlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 99999;
+    display: none; /* 預設隱藏 */
+    align-items: center; /* 垂直置中 */
+    justify-content: center; /* 水平置中 */
+}
+
+.wpt-modal-content {
+    background: white;
+    width: 300px;
+    padding: 25px; /* 增加一點內距讓 X 按鈕不擁擠 */
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    position: relative; /* 關鍵：讓內部的 X 可以絕對定位 */
+}
+}
   </style>
 </head>
 
 <body>
   <div id="header">
-    <strong style="font-size: 12px; color: #333;">YCHiking-GPX 路線檢視工具 v2604241</strong>
+    <strong style="font-size: 12px; color: #333;">YCHiking-GPX 路線檢視工具 v2604242</strong>
     <div class="upload-row">
       <input type="file" id="gpxInput" accept=".gpx" style="display: none;" />
       <input type="file" id="multiGpxInput" accept=".gpx" multiple style="display: none;" />
@@ -726,9 +747,62 @@
       </div>
     </div>
   </div>
-
+  
 	<button id="toggleChartBtn" onclick="toggleElevationChart()" style="display: none;">展開/收合高度表</button>
-	
+			<div id="wptEditModal" class="wpt-modal-overlay">
+  <div class="wpt-modal-content" onclick="event.stopPropagation()">
+    
+    <span style="position: absolute; top: 10px; right: 15px; font-size: 24px; cursor: pointer; color: #999;" 
+          onclick="document.getElementById('wptEditModal').style.display='none'">×</span>
+
+    <h3 style="margin: 0 0 15px 0; color: #1a73e8; text-align: center;">編輯航點</h3>
+    
+    <div style="margin-bottom: 10px;">
+      <label style="display: block; font-size: 12px; color: #666;">航點名稱</label>
+      <input type="text" id="modalWptName" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;">
+    </div>
+    
+    <div style="margin-bottom: 15px;">
+      <label style="display: block; font-size: 12px; color: #666;">高度 (m)</label>
+      <input type="number" id="modalWptEle" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;">
+    </div>
+    
+    <button id="modalWptConfirm" style="width: 100%; background: #1a73e8; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; font-weight: bold;">確認儲存</button>
+  </div>
+</div>
+		
+		<div id="renameModal" class="wpt-modal-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:10001; justify-content:center; align-items:center;"> 
+    <div class="wpt-modal-content" style="background:white; padding:25px; border-radius:12px; width:320px; position:relative;" onclick="event.stopPropagation()">
+        <span style="position: absolute; top: 10px; right: 15px; font-size: 24px; cursor: pointer; color: #999;" 
+              onclick="document.getElementById('renameModal').style.display='none'">×</span>
+        
+        <h3 style="margin: 0 0 15px 0; color: #1a73e8; text-align: center;">修改路線名稱</h3>
+        
+        <div style="margin-bottom: 15px;">
+              <input type="text" id="modalRouteName" style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; text-align: center;">
+        </div>
+
+        <p style="margin:0 0 20px 0; color:#e74c3c; font-size:13px; line-height:1.5; font-family: sans-serif; text-align: center; font-weight: bold;">
+            修改後切換不同檔案的GPX，<br>請先記得匯出。
+        </p>
+
+        <button id="modalRouteConfirm" style="width: 100%; background: #1a73e8; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 16px;">確認更新</button>
+    </div>
+</div>
+<div id="deleteConfirmModal" style="display:none; position:fixed !important; top:0 !important; left:0 !important; width:100vw !important; height:100vh !important; background:rgba(0,0,0,0.7) !important; z-index:999999 !important; justify-content:center; align-items:center; backdrop-filter: blur(3px);">
+    <div style="background:white; padding:30px; border-radius:15px; width:320px; text-align:center; box-shadow:0 20px 50px rgba(0,0,0,0.5); border: 1px solid #fff; position:relative;">
+        <div style="background:#fff5f0; width:60px; height:60px; border-radius:50%; display:flex; align-items:center; justify-content:center; margin: 0 auto 15px;">
+            <span class="material-icons" style="font-size:40px; color:#d35400;">report_problem</span>
+        </div>
+        <h3 style="margin:0 0 10px 0; color:#2c3e50; font-size:20px; font-weight:bold; font-family: sans-serif;">確定要刪除嗎？</h3>
+        <p style="margin:0 0 25px 0; color:#7f8c8d; font-size:14px; line-height:1.6; font-family: sans-serif;">此動作無法復原。<br>您確定要刪除此航點？</p>
+        
+        <div style="display:flex; gap:12px; justify-content:center;">
+            <button id="modalDeleteCancel" style="flex:1; padding:12px; border:1px solid #ddd; background:#f8f9fa; color:#333; border-radius:8px; cursor:pointer; font-weight:bold;">取消</button>
+            <button id="modalDeleteConfirm" style="flex:1; padding:12px; border:none; background:#1a73e8; color:white; border-radius:8px; cursor:pointer; font-weight:bold;">確定刪除</button>
+        </div>
+    </div>
+</div>
 	<label id="chartTipToggleLabel" style="display: none; align-items: center; justify-content: center; cursor: pointer; font-size: 14px; color: #555; margin-top: 5px; width: fit-content; margin-left: auto; margin-right: auto;">
 	    <input type="checkbox" id="showChartTipCheckbox" checked style="margin-right: 5px; cursor: pointer;">
 	    拖移時顯示位置資訊
