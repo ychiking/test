@@ -3758,7 +3758,7 @@ window.exportGpx = function(index) {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        const safeName = trackName.replace(/[/\\?%*:|"<>]/g, '-');
+        const safeName = trackName.replace(/[/\\?%*:|<>]/g, '-');
         const fileName = safeName.toLowerCase().endsWith('.gpx') ? safeName : `${safeName}.gpx`;
         a.download = fileName;
         document.body.appendChild(a);
@@ -3828,4 +3828,96 @@ window.renameSubRoute = function(idx) {
         // 清除監聽，避免影響下次操作
         input.onkeydown = null; 
     };
+};
+
+// ================= 新增搜尋按鈕控制項 =================
+const searchControl = L.control({ position: 'topright' });
+
+searchControl.onAdd = function() {
+    const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+    
+    // 容器樣式參考 GPX 管理介面，寬高 45x45
+    container.innerHTML = `
+        <a href="#" title="搜尋地點" style="
+            background-color: white; 
+            width: 45px; 
+            height: 45px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            text-decoration: none; 
+            color: #333;
+        ">
+            <span class="material-icons" style="font-size: 28px;">search</span>
+        </a>
+    `;
+
+    // 防止點擊按鈕時觸發地圖縮放或點擊
+    L.DomEvent.disableClickPropagation(container);
+
+    container.onclick = function(e) {
+        e.preventDefault();
+        const modal = document.getElementById('searchModal');
+        const input = document.getElementById('searchInput');
+        modal.style.display = 'flex';
+        input.value = "";
+        setTimeout(() => input.focus(), 100);
+    };
+
+    return container;
+};
+
+searchControl.addTo(map);
+
+// ================= 搜尋功能邏輯 =================
+const searchConfirmBtn = document.getElementById('searchConfirmBtn');
+const searchInput = document.getElementById('searchInput');
+const searchStatus = document.getElementById('searchStatus');
+
+function performSearch() {
+    const query = searchInput.value.trim();
+    if (!query) return;
+
+    searchStatus.innerText = "搜尋中...";
+    searchStatus.style.color = "#1a73e8";
+
+    // 使用 Nominatim 免費搜尋 API
+    fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data && data.length > 0) {
+                const result = data[0];
+                const lat = parseFloat(result.lat);
+                const lon = parseFloat(result.lon);
+                
+                // 移動地圖並彈出標記
+                map.setView([lat, lon], 14);
+                L.popup()
+                    .setLatLng([lat, lon])
+                    .setContent(`<b>搜尋結果：</b><br>${result.display_name}`)
+                    .openOn(map);
+
+                // 關閉視窗
+                document.getElementById('searchModal').style.display = 'none';
+                searchStatus.innerText = "輸入關鍵字後按下搜尋。";
+                searchStatus.style.color = "#666";
+            } else {
+                searchStatus.innerText = "找不到該地點，請嘗試其他關鍵字";
+                searchStatus.style.color = "#e74c3c";
+            }
+        })
+        .catch(err => {
+            searchStatus.innerText = "連線發生錯誤，請稍後再試";
+            searchStatus.style.color = "#e74c3c";
+        });
+}
+
+// 綁定確認按鈕點擊事件
+searchConfirmBtn.onclick = performSearch;
+
+// 支援 Enter 鍵搜尋
+searchInput.onkeydown = function(e) {
+    if (e.key === "Enter") {
+        performSearch();
+    }
 };
