@@ -632,46 +632,46 @@
     width: 100vw; height: 100vh;
     background: rgba(0, 0, 0, 0.6);
     z-index: 99999;
-    display: none; /* 預設隱藏 */
-    align-items: center; /* 垂直置中 */
-    justify-content: center; /* 水平置中 */
+    display: none; 
+    align-items: center; 
+    justify-content: center; 
 }
 
 .wpt-modal-content {
     background: white;
     width: 300px;
-    padding: 25px; /* 增加一點內距讓 X 按鈕不擁擠 */
+    padding: 25px; 
     border-radius: 12px;
     box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-    position: relative; /* 關鍵：讓內部的 X 可以絕對定位 */
+    position: relative; 
 }
 }
 
-/* 確保右側控制項容器使用 flex 並垂直排列，讓搜尋按鈕排在最後 */
+
 .leaflet-top.leaflet-right {
     display: flex;
     flex-direction: column;
 }
 
-/* 讓搜尋按鈕所在的容器排在最後面 (order 設大一點) */
+
 #searchControlContainer {
     order: 99; 
-    margin-top: 5px; /* 與上方按鈕保持間距 */
+    margin-top: 5px; 
 }
 
-/* 修正 Leaflet 預設邊框問題，讓 45x45 看起來乾淨 */
+
 #searchControlContainer a {
     border: none !important;
 }
-/* 調整圖層選擇器的外框大小 */
+
 .leaflet-control-layers-toggle {
-    width: 35px !important;  /* 外框寬度改為 35px */
-    height: 35px !important; /* 外框高度改為 35px */
-    background-size: 25px 25px !important; /* 內部圖層圖示改為 22px */
-    background-position: center !important; /* 確保圖示置中 */
+    width: 35px !important;  
+    height: 35px !important; 
+    background-size: 25px 25px !important; 
+    background-position: center !important; 
 }
 
-/* 為了美觀，調整右側控制項的間距與對齊 */
+
 .leaflet-top.leaflet-right {
     display: flex;
     flex-direction: column;
@@ -686,7 +686,7 @@
 
 <body>
   <div id="header">
-    <strong style="font-size: 12px; color: #333;">YCHiking-GPX 路線檢視工具 v2604283</strong>
+    <strong style="font-size: 12px; color: #333;">YCHiking-GPX 路線檢視工具 v2604285</strong>
     <div class="upload-row">
       <input type="file" id="gpxInput" accept=".gpx" style="display: none;" />
       <input type="file" id="multiGpxInput" accept=".gpx" multiple style="display: none;" />
