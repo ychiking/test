@@ -90,37 +90,46 @@ const routeSelect = document.getElementById("routeSelect");
 let clickTimeout = null;
 
 map.on('click', (e) => {
+    // 防呆：確保 e.latlng 存在
+    if (!e || !e.latlng) return;
+
     let closest = null;
     let minD = Infinity;
 
     if (trackPoints && trackPoints.length > 0) {
         trackPoints.forEach(p => {
+            
             const d = Math.sqrt(Math.pow(p.lat - e.latlng.lat, 2) + Math.pow(p.lon - e.latlng.lng, 2));
             if (d < minD) { minD = d; closest = p; }
         });
     }
 
+    
     if (closest && minD * 111000 < 5) {
-        if (clickTimeout) clearTimeout(clickTimeout); 
-        L.popup()
-            .setLatLng([closest.lat, closest.lng])
-            .setContent(`
-                <div style="font-size:14px; line-height:1.6;">
-                    <b>路徑位置資訊</b><br>
-                    海拔: ${closest.ele.toFixed(1)} m<br>
-                    里程: ${(closest.dist / 1000).toFixed(2)} km<br>
-                    <hr style="margin:8px 0; border:0; border-top:1px solid #ccc;">
-                    <div style="display:flex; gap:5px;">
-                        <button onclick="setPoint('A', ${closest.lat}, ${closest.lng})" style="flex:1; cursor:pointer; padding:4px;">設為 A 點</button>
-                        <button onclick="setPoint('B', ${closest.lat}, ${closest.lng})" style="flex:1; cursor:pointer; padding:4px;">設為 B 點</button>
-                    </div>
-                </div>
-            `)
-            .openOn(map);
-    } 
+    
+    if (clickTimeout) clearTimeout(clickTimeout); 
+
+    
+    
+    const idx = trackPoints.indexOf(closest);
+
+    
+    if (idx !== -1 && typeof showCustomPopup === 'function') {
+        
+        showCustomPopup(idx, "位置資訊", null, closest.lat, closest.lon);
+        
+        
+        if (hoverMarker) {
+            hoverMarker.setLatLng([closest.lat, closest.lon]).addTo(map).bringToFront();
+        }
+    }
+}
     else {
+        
         clickTimeout = setTimeout(() => {
-            showFreeClickPopup(e.latlng);
+            if (typeof showFreeClickPopup === 'function') {
+                showFreeClickPopup(e.latlng);
+            }
         }, 200);
     }
 });
@@ -357,7 +366,6 @@ function showFreeClickPopup(latlng, searchTitle = null, searchAddr = null) {
             });
 
             if (foundIdx !== -1) {
-                console.log(`[Redirect] 偵測到既有航點 "${title}"，導流至 showCustomPopup`);
                 
                 let trackIdx = 999999;
                 if (typeof trackPoints !== 'undefined') {
@@ -874,7 +882,7 @@ function setupProgressBar() {
             if (isChecked) {
                 showCustomPopup(idx, "位置資訊");
                 
-                startAutoCloseTimer();
+                
             } else {
                 map.closePopup(); 
             }
@@ -941,20 +949,16 @@ function loadRoute(index, customColor = null) {
         return result;
     };
 
-    
-    
     const drawSegments = (sel.segments && sel.segments.length > 0) 
                          ? sel.segments 
                          : breakTracks(trackPoints);
 
-    
     let finalColor = customColor || "red"; 
     if (typeof multiGpxStack !== 'undefined' && multiGpxStack.length > 0) {
         const stackIdx = (window.currentMultiIndex !== undefined) ? window.currentMultiIndex : 0;
         multiGpxStack.forEach((item, i) => {
             const layer = item.layer;
             if (!(layer instanceof L.Polyline)) return;
-            
             
             if (item.segments && item.segments.length > 0) {
                 layer.setLatLngs(item.segments);
@@ -979,16 +983,13 @@ function loadRoute(index, customColor = null) {
         });
     }
 
-    
     if (polyline) map.removeLayer(polyline);
     markers.forEach(m => map.removeLayer(m));
     wptMarkers.forEach(m => map.removeLayer(m));
     if (window.chart) { window.chart.destroy(); window.chart = null; }
     markers = []; wptMarkers = []; polyline = null; 
 
-    
     if (trackPoints && trackPoints.length > 0) {
-        
         polyline = L.polyline(drawSegments, { color: finalColor, weight: 6, opacity: 0.8 }).addTo(map);
 
         if (polyline.getBounds().isValid()) {
@@ -1020,7 +1021,14 @@ function loadRoute(index, customColor = null) {
                     }
                 }
                 if (!hoverMarker) {
-                    hoverMarker = L.circleMarker([0,0], { radius: 7, color: '#ffffff', weight: 2, fillColor: '#1a73e8', fillOpacity: 1 }).addTo(map);
+                    hoverMarker = L.circleMarker([trackPoints[idx].lat, trackPoints[idx].lon], { 
+                        radius: 7, 
+                        color: '#ffffff', 
+                        weight: 2, 
+                        fillColor: '#1a73e8', 
+                        fillOpacity: 1,
+                        interactive: false 
+                    }).addTo(map);
                 } else if (!map.hasLayer(hoverMarker)) {
                     hoverMarker.addTo(map);
                 }
@@ -1030,20 +1038,60 @@ function loadRoute(index, customColor = null) {
         });
 
         try {
-            const startMarker = L.marker([trackPoints[0].lat, trackPoints[0].lon], { icon: startIcon, zIndexOffset: 1000 }).addTo(map);
-            startMarker.on('click', (e) => { L.DomEvent.stopPropagation(e); showCustomPopup(0, "起點", null); });
-            markers.push(startMarker);
+    // 1. 設定起點連動
+    const startMarker = L.marker([trackPoints[0].lat, trackPoints[0].lon], { 
+        icon: startIcon, 
+        zIndexOffset: 1000 
+    }).addTo(map);
 
-            const lastIdx = trackPoints.length - 1;
-            const endMarker = L.marker([trackPoints[lastIdx].lat, trackPoints[lastIdx].lon], { icon: endIcon, zIndexOffset: 1000 }).addTo(map);
-            endMarker.on('click', (e) => { L.DomEvent.stopPropagation(e); showCustomPopup(lastIdx, "終點", null); });
-            markers.push(endMarker);
-        } catch (err) {}
+    startMarker.on('click', (e) => { 
+        L.DomEvent.stopPropagation(e); 
+        
+        // --- 連動高度表與小白點 ---
+        const progressBar = document.getElementById('gpxProgressBar');
+        if (progressBar) {
+            progressBar.value = 0; // 起點索引為 0
+            progressBar.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        if (hoverMarker) {
+            hoverMarker.setLatLng([trackPoints[0].lat, trackPoints[0].lon]).addTo(map).bringToFront();
+        }
+        // -----------------------
+
+        showCustomPopup(0, "起點", null); 
+    });
+    markers.push(startMarker);
+
+    // 2. 設定終點連動
+    const lastIdx = trackPoints.length - 1;
+    const endMarker = L.marker([trackPoints[lastIdx].lat, trackPoints[lastIdx].lon], { 
+        icon: endIcon, 
+        zIndexOffset: 1000 
+    }).addTo(map);
+
+    endMarker.on('click', (e) => { 
+        L.DomEvent.stopPropagation(e); 
+
+        // --- 連動高度表與小白點 ---
+        const progressBar = document.getElementById('gpxProgressBar');
+        if (progressBar) {
+            progressBar.value = lastIdx; // 終點索引
+            progressBar.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        if (hoverMarker) {
+            hoverMarker.setLatLng([trackPoints[lastIdx].lat, trackPoints[lastIdx].lon]).addTo(map).bringToFront();
+        }
+        // -----------------------
+
+        showCustomPopup(lastIdx, "終點", null); 
+    });
+    markers.push(endMarker);
+
+} catch (err) {}
 
         if (typeof drawElevationChart === 'function') drawElevationChart();
     }
 
-    
     if (sel.waypoints && sel.waypoints.length > 0) {
         const activeIdx = window.currentActiveIndex || 0;
         let startTime = null, endTime = null;
@@ -1069,23 +1117,13 @@ function loadRoute(index, customColor = null) {
 
         displayWaypoints.forEach((w) => {
             let tIdx = null; 
-            
             if (trackPoints && trackPoints.length > 0) {
                 let minD = Infinity;
                 let nearestIdx = -1;
-                
                 trackPoints.forEach((tp, pi) => {
-                    
                     let d = Math.sqrt((w.lat - tp.lat) ** 2 + (w.lon - tp.lon) ** 2);
-                    if (d < minD) { 
-                        minD = d; 
-                        nearestIdx = pi; 
-                    }
+                    if (d < minD) { minD = d; nearestIdx = pi; }
                 });
-
-                
-                
-                
                 if (nearestIdx !== -1 && minD <= 0.00015) {
                     tIdx = nearestIdx;
                 }
@@ -1103,20 +1141,47 @@ function loadRoute(index, customColor = null) {
 
             wm.on('click', (e) => { 
                 L.DomEvent.stopPropagation(e); 
-                
-                
+                if (tIdx !== null && trackPoints && trackPoints[tIdx]) {
+                    const progressBar = document.getElementById('gpxProgressBar');
+                    if (progressBar) {
+                        progressBar.value = tIdx;
+                        progressBar.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                    if (typeof chart !== 'undefined' && chart) {
+                        const meta = chart.getDatasetMeta(0);
+                        const point = meta.data[tIdx];
+                        if (point) {
+                            chart.setActiveElements([{ datasetIndex: 0, index: tIdx }]);
+                            chart.tooltip.setActiveElements([{ datasetIndex: 0, index: tIdx }], { x: point.x, y: point.y });
+                            chart.update('none');
+                        }
+                    }
+                    if (!hoverMarker) {
+                        hoverMarker = L.circleMarker([trackPoints[tIdx].lat, trackPoints[tIdx].lon], {
+                            radius: 7, color: '#ffffff', weight: 2, fillColor: '#1a73e8', fillOpacity: 1
+                        }).addTo(map);
+                    } else {
+                        hoverMarker.setLatLng([trackPoints[tIdx].lat, trackPoints[tIdx].lon]).addTo(map).bringToFront();
+                    }
+                } else if (hoverMarker) {
+                    hoverMarker.setLatLng([w.lat, w.lon]).addTo(map).bringToFront();
+                }
                 showCustomPopup(tIdx, w.name, "wpt", w.lat, w.lon); 
             });
             wptMarkers.push(wm);
         });
     }
 
-    
     const startLat = (trackPoints.length > 0) ? trackPoints[0].lat : (sel.waypoints?.[0]?.lat || null);
     const startLon = (trackPoints.length > 0) ? trackPoints[0].lon : (sel.waypoints?.[0]?.lon || null);
     if (startLat !== null && startLon !== null) {
-        if (!hoverMarker) hoverMarker = L.circleMarker([startLat, startLon], { radius: 6, color: "blue", fillColor: "#fff", fillOpacity: 1, weight: 3 }).addTo(map);
-        else hoverMarker.setLatLng([startLat, startLon]).bringToFront();
+        if (!hoverMarker) {
+            hoverMarker = L.circleMarker([startLat, startLon], { 
+                radius: 7, color: "#ffffff", fillColor: "#1a73e8", fillOpacity: 1, weight: 2 
+            }).addTo(map);
+        } else {
+            hoverMarker.setLatLng([startLat, startLon]).bringToFront();
+        }
     }
     
     if (typeof renderRouteInfo === 'function') renderRouteInfo();
@@ -1490,112 +1555,177 @@ window.copyText = function(id) {
     }
 };
 
-/**
- * @param {number} idx - 索引
- * @param {string} title - 標題
- * @param {string|number} typeOrEle - 關鍵修正：傳入 "wpt" 強制編輯模式，或傳入高度數值
- * @param {number} realLat - 緯度
- * @param {number} realLon - 經緯度
- */
+
+window.popupDetailExpanded = (typeof window.popupDetailExpanded !== 'undefined') ? window.popupDetailExpanded : true; 
+
+window.togglePopupDetail = function() {
+    const info = document.getElementById('all-info-wrapper');
+    const btn = document.getElementById('detail-toggle');
+    if (info && btn) {
+        if (info.style.display === 'none') {
+            info.style.display = 'block';
+            btn.innerText = '收合資訊';
+            window.popupDetailExpanded = true;
+        } else {
+            info.style.display = 'none';
+            btn.innerText = '顯示資訊';
+            window.popupDetailExpanded = false;
+        }
+    }
+};
+
+
+window.popupDetailExpanded = (typeof window.popupDetailExpanded !== 'undefined') ? window.popupDetailExpanded : true; 
+
+window.togglePopupDetail = function() {
+    const info = document.getElementById('all-info-wrapper');
+    const btn = document.getElementById('detail-toggle');
+    if (info && btn) {
+        if (info.style.display === 'none') {
+            info.style.display = 'block';
+            btn.innerText = '收合資訊';
+            window.popupDetailExpanded = true;
+        } else {
+            info.style.display = 'none';
+            btn.innerText = '顯示資訊';
+            window.popupDetailExpanded = false;
+        }
+    }
+};
+
 function showCustomPopup(idx, title, typeOrEle = null, realLat = null, realLon = null) {
-  const isWptMode = (typeOrEle === "wpt");
-  const lat = (isWptMode || realLat !== null) ? realLat : (trackPoints[idx] ? trackPoints[idx].lat : null);
-  const lon = (isWptMode || realLon !== null) ? realLon : (trackPoints[idx] ? trackPoints[idx].lon : null);
+    const isWptMode = (typeOrEle === "wpt");
+    const lat = (isWptMode || realLat !== null) ? realLat : (trackPoints[idx] ? trackPoints[idx].lat : null);
+    const lon = (isWptMode || realLon !== null) ? realLon : (trackPoints[idx] ? trackPoints[idx].lon : null);
 
-  if (lat === null || lon === null) return;
+    if (lat === null || lon === null) return;
 
-  let waypointIdx = -1;
-  let waypointTime = null;
-  let finalTitle = title;
-  let targetGpx = null;
+    
+    if (window.activeFocusCircle) {
+        window.activeFocusCircle.setLatLng([lat, lon]);
+    } else {
+        
+        window.activeFocusCircle = L.circleMarker([lat, lon], {
+            radius: 5, color: '#fff', weight: 1, fillColor: '#1a73e8', fillOpacity: 1, interactive: false
+        }).addTo(map);
+    }
 
-  
-  const activeIdx = (typeof window.currentActiveIndex !== 'undefined') ? window.currentActiveIndex : 0;
-  let potentialSources = [];
-  if (window.allTracks) potentialSources = [...window.allTracks];
-  if (window.multiGpxStack) potentialSources = [...potentialSources, ...window.multiGpxStack];
+    
+    let matchedPoint = (idx !== null && idx !== 999999 && typeof trackPoints !== 'undefined' && trackPoints[idx]) ? trackPoints[idx] : null;
+    
+    
+    if (!matchedPoint && typeof trackPoints !== 'undefined') {
+        const foundIdx = trackPoints.findIndex(p => 
+            Math.abs(p.lat - lat) < 0.00015 && Math.abs(p.lon - lon) < 0.00015
+        );
+        if (foundIdx !== -1) {
+            matchedPoint = trackPoints[foundIdx];
+            idx = foundIdx; 
+        }
+    }
+    
 
-  for (let gpx of potentialSources) {
-      if (!gpx || !gpx.waypoints) continue;
-      let foundIdx = gpx.waypoints.findIndex(w => 
-          Math.abs(w.lat - lat) < 0.00015 && Math.abs(w.lon - lon) < 0.00015
-      );
-      if (foundIdx !== -1) {
-          waypointIdx = foundIdx;
-          targetGpx = gpx;
-          const wptData = gpx.waypoints[waypointIdx];
-          finalTitle = wptData.name;
-          waypointTime = wptData.localTime || (wptData.time ? new Date(wptData.time).toLocaleString() : null);
-          break;
-      }
-  }
+    let waypointIdx = -1;
+    let waypointTime = null;
+    let finalTitle = title;
+    let targetGpx = null;
 
-  
-  let matchedPoint = (idx !== null && idx !== 999999 && typeof trackPoints !== 'undefined' && trackPoints[idx]) ? trackPoints[idx] : null;
+    const activeIdx = (typeof window.currentActiveIndex !== 'undefined') ? window.currentActiveIndex : 0;
+    let potentialSources = [];
+    if (window.allTracks) potentialSources = [...window.allTracks];
+    if (window.multiGpxStack) potentialSources = [...potentialSources, ...window.multiGpxStack];
 
-  
-  const offPathEle = (typeof typeOrEle === 'number') ? typeOrEle : null;
-  let eleValue = 0;
-  if (matchedPoint && matchedPoint.ele) {
-      eleValue = matchedPoint.ele;
-  } else if (offPathEle !== null) {
-      eleValue = offPathEle;
-  } else if (waypointIdx !== -1 && targetGpx && targetGpx.waypoints[waypointIdx].ele) {
-      eleValue = targetGpx.waypoints[waypointIdx].ele;
-  }
-  const eleDisplay = (eleValue !== 0) ? eleValue.toFixed(0) : "---";
+    for (let gpx of potentialSources) {
+        if (!gpx || !gpx.waypoints) continue;
+        let foundIdx = gpx.waypoints.findIndex(w =>
+            Math.abs(w.lat - lat) < 0.00015 && Math.abs(w.lon - lon) < 0.00015
+        );
+        if (foundIdx !== -1) {
+            waypointIdx = foundIdx;
+            targetGpx = gpx;
+            const wptData = gpx.waypoints[waypointIdx];
+            finalTitle = wptData.name;
+            waypointTime = wptData.localTime || (wptData.time ? new Date(wptData.time).toLocaleString() : null);
+            break;
+        }
+    }
 
-  
-  const dist = (matchedPoint && matchedPoint.distance !== undefined) ? matchedPoint.distance.toFixed(2) : null;
-  
-  
-  const displayTime = (matchedPoint && matchedPoint.timeLocal) ? matchedPoint.timeLocal : 
-                      (waypointTime ? waypointTime : new Date().toLocaleString());
+    const offPathEle = (typeof typeOrEle === 'number') ? typeOrEle : null;
+    let eleValue = 0;
+    if (matchedPoint && matchedPoint.ele) {
+        eleValue = matchedPoint.ele;
+    } else if (offPathEle !== null) {
+        eleValue = offPathEle;
+    } else if (waypointIdx !== -1 && targetGpx && targetGpx.waypoints[waypointIdx].ele) {
+        eleValue = targetGpx.waypoints[waypointIdx].ele;
+    }
+    const eleDisplay = (eleValue !== 0) ? eleValue.toFixed(0) : "---";
+    const dist = (matchedPoint && matchedPoint.distance !== undefined) ? matchedPoint.distance.toFixed(2) : null;
+    const displayTime = (matchedPoint && matchedPoint.timeLocal) ? matchedPoint.timeLocal :
+                        (waypointTime ? waypointTime : new Date().toLocaleString());
 
-  const isExisting = (waypointIdx !== -1);
-  const iconName = isExisting ? 'edit' : 'add_location'; 
-  const iconColor = (matchedPoint) ? '#1a73e8' : '#d35400';
-  const safeTitle = (finalTitle || "位置資訊").replace(/'/g, "\\'");
+    const isExisting = (waypointIdx !== -1);
+    const iconName = isExisting ? 'edit' : 'add_location';
+    const iconColor = (matchedPoint) ? '#1a73e8' : '#d35400';
+    const safeTitle = (finalTitle || "位置資訊").replace(/'/g, "\\'");
 
-  
-  const editIcon = `<span class="material-icons" style="font-size:16px; cursor:pointer; vertical-align:middle; margin-left:4px; color:${iconColor};" 
-      onclick="event.stopPropagation(); handleWptEdit(${waypointIdx !== -1 ? waypointIdx : 'null'}, ${lat}, ${lon}, ${eleValue}, '${safeTitle}', '${displayTime}', ${idx})">${iconName}</span>`;
-  const twd97 = proj4(WGS84_DEF, TWD97_DEF, [lon, lat]);
-  const twd67 = proj4(WGS84_DEF, TWD67_DEF, [lon, lat]);
-  const gUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
-  const gMapIconBtn = `<a href="${gUrl}" target="_blank" style="text-decoration:none; margin-right:8px; display:inline-flex; align-items:center; justify-content:center; width: 28px; height: 28px; background: #fff; border: 1px solid #ccc; border-radius: 50%; vertical-align: middle;"><img src="https://ychiking.github.io/gpx-online-viewer/GoogleMaps.png" style="width:18px; height:18px;"></a>`;
-  const eleHtml = (eleDisplay !== "---") ? `高度: ${eleDisplay} m<br>` : "";
-  const distHtml = (dist !== null) ? `距離: ${dist} km<br>` : "";
-  
-  const effectiveIdxForAB = (matchedPoint) ? idx : 999999;
-  const abButtons = `
-    <div style="display:flex; margin-top:10px; gap:5px;">
-      <button onclick="setAB('A', ${effectiveIdxForAB}, ${lat}, ${lon})" style="flex:1; background:#007bff; color:white; border:none; padding:6px; border-radius:4px; cursor:pointer; font-weight:bold;">設定 A</button>
-      <button onclick="setAB('B', ${effectiveIdxForAB}, ${lat}, ${lon})" style="flex:1; background:#e83e8c; color:white; border:none; padding:6px; border-radius:4px; cursor:pointer; font-weight:bold;">設定 B</button>
-    </div>`;
+    const editIcon = `<span class="material-icons" style="font-size:16px; cursor:pointer; vertical-align:middle; margin-left:4px; color:${iconColor};" 
+        onclick="event.stopPropagation(); handleWptEdit(${waypointIdx !== -1 ? waypointIdx : 'null'}, ${lat}, ${lon}, ${eleValue}, '${safeTitle}', '${displayTime}', ${idx})">${iconName}</span>`;
+    
+    const twd97 = proj4(WGS84_DEF, TWD97_DEF, [lon, lat]);
+    const twd67 = proj4(WGS84_DEF, TWD67_DEF, [lon, lat]);
+    
+    const gUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
+    const gMapIconBtn = `<a href="${gUrl}" target="_blank" style="text-decoration:none; margin-right:8px; display:inline-flex; align-items:center; justify-content:center; width: 28px; height: 28px; background: #fff; border: 1px solid #ccc; border-radius: 50%; vertical-align: middle;"><img src="https://ychiking.github.io/gpx-online-viewer/GoogleMaps.png" style="width:18px; height:18px;"></a>`;
+    
+    const eleHtml = (eleDisplay !== "---") ? `高度: ${eleDisplay} m<br>` : "";
+    const distHtml = (dist !== null) ? `距離: ${dist} km<br>` : "";
 
-  let content = `
-    <div style="min-width:180px; font-size:13px; line-height:1.6;">
-      <div style="display:flex; align-items:center; margin-bottom:5px;">
-        ${gMapIconBtn}
-        <b style="font-size:14px; color:${iconColor};">${finalTitle}</b>${editIcon}
-      </div>
-      <hr style="margin:8px 0; border:0; border-top:1px solid #eee;">
-      ${eleHtml}
-      ${distHtml}
-      時間: ${displayTime}<br> 
-      WGS84: ${lat.toFixed(5)}, ${lon.toFixed(5)}<br>
-      TWD97: ${Math.round(twd97[0])}, ${Math.round(twd97[1])}<br>
-      TWD67: ${Math.round(twd67[0])}, ${Math.round(twd67[1])}<br>
-      ${(!matchedPoint) ? '<span style="color:#d35400; font-weight:bold;">📍 非路徑位置</span>' : ''}
-      ${abButtons}
-    </div>`;
+    const effectiveIdxForAB = (matchedPoint) ? idx : 999999;
+    const abButtons = `
+      <div style="display:flex; margin-top:10px; gap:5px;">
+        <button onclick="setAB('A', ${effectiveIdxForAB}, ${lat}, ${lon})" style="flex:1; background:#007bff; color:white; border:none; padding:6px; border-radius:4px; cursor:pointer; font-weight:bold;">設定 A</button>
+        <button onclick="setAB('B', ${effectiveIdxForAB}, ${lat}, ${lon})" style="flex:1; background:#e83e8c; color:white; border:none; padding:6px; border-radius:4px; cursor:pointer; font-weight:bold;">設定 B</button>
+      </div>`;
 
-  if (currentPopup && map.hasLayer(currentPopup)) {
-      currentPopup.setLatLng([lat, lon]).setContent(content);
-  } else {
-      currentPopup = L.popup({ autoClose: true, closeOnClick: false }).setLatLng([lat, lon]).setContent(content).openOn(map);
-  }
+    const isExpanded = (window.popupDetailExpanded !== false); 
+    const detailDisplayStyle = isExpanded ? 'block' : 'none';
+    const detailBtnText = isExpanded ? '收合資訊' : '顯示資訊';
+
+    let content = `
+      <div style="min-width:180px; font-size:13px; line-height:1.6;">
+        <div style="display:flex; align-items:center; margin-bottom:5px;">
+          ${gMapIconBtn}
+          <b style="font-size:14px; color:${iconColor};">${finalTitle}</b>${editIcon}
+        </div>
+        
+        <div style="display:flex; align-items:center; margin:8px 0;">
+          <div style="flex:1; border-top:1px solid #eee;"></div>
+          <span id="detail-toggle" onclick="window.togglePopupDetail()" 
+                style="cursor:pointer; font-size:10px; color:#1a73e8; background:#fff; padding:0 8px; white-space:nowrap; border:1px solid #eee; border-radius:10px; line-height:18px;">${detailBtnText}</span>
+          <div style="flex:1; border-top:1px solid #eee;"></div>
+        </div>
+
+        <div id="all-info-wrapper" style="display:${detailDisplayStyle};">
+          <div style="margin-bottom:0px;">
+            ${eleHtml}
+            ${distHtml}
+            時間: ${displayTime}<br>
+            WGS84: ${lat.toFixed(5)}, ${lon.toFixed(5)}<br>
+            TWD97: ${Math.round(twd97[0])}, ${Math.round(twd97[1])}<br>
+            TWD67: ${Math.round(twd67[0])}, ${Math.round(twd67[1])}
+            ${(!matchedPoint) ? '<div style="color:#d35400; font-weight:bold; margin-top:2px;">📍 非路徑位置</div>' : ''}
+          </div>
+        </div>
+
+        ${abButtons}
+      </div>`;
+
+    if (currentPopup && map.hasLayer(currentPopup)) {
+        currentPopup.setLatLng([lat, lon]).setContent(content);
+    } else {
+        currentPopup = L.popup({ autoClose: false, closeOnClick: false }).setLatLng([lat, lon]).setContent(content).openOn(map);
+    }
 }
 
 function startHeightTipTimer() {
@@ -3554,20 +3684,40 @@ window.toggleColorPicker = function(i) {
 let currentEditTask = null;
 
 window.handleWptEdit = function(existingIdx, lat, lon, ele, oldName, timeStr, originalIdx) {
+    // --- 1. 基礎資料結構初始化 ---
+    if (!window.multiGpxStack) window.multiGpxStack = [];
+    if (!window.allTracks) window.allTracks = [];
     
-    if (typeof window.currentMultiIndex === 'undefined') window.currentActiveIndex = 0; 
-    let stackIdx = window.currentMultiIndex || 0;
-    if (typeof multiGpxStack === 'undefined' || !multiGpxStack) window.multiGpxStack = [];
-    if (!multiGpxStack[stackIdx]) {
-        multiGpxStack[stackIdx] = { name: "純航點", points: [], waypoints: [], stats: { totalDistance: 0, totalElevation: 0 }, isCombined: false };
+    if (window.currentActiveIndex === undefined || window.currentActiveIndex === null) {
+        window.currentActiveIndex = 0;
     }
-    if (typeof allTracks === 'undefined' || !allTracks || allTracks.length === 0) {
-        window.allTracks = [multiGpxStack[stackIdx]];
-    }
-    let activeIdx = window.currentActiveIndex || 0;
-    if (!allTracks[activeIdx]) activeIdx = 0;
+    let activeIdx = window.currentActiveIndex;
 
-    
+    // --- 2. ✅ 修正：只有在真正全空時才建立「純航點」專案 ---
+    if (window.allTracks.length === 0) {
+        const pureProject = { 
+            name: "純航點", 
+            fileName: "純航點.gpx",
+            trackPoints: [], 
+            waypoints: [], 
+            stats: { totalDistance: 0, totalElevation: 0 }, 
+            isCombined: false 
+        };
+        // 確保兩個堆疊都同步
+        window.multiGpxStack = [pureProject];
+        window.allTracks = [pureProject];
+        window.currentActiveIndex = 0;
+        activeIdx = 0;
+
+        console.log("偵測到空白地圖，自動建立純航點專案");
+
+        // ✅ 關鍵：立刻刷新左側檔案清單渲染，讓使用者看到「純航點」
+        if (typeof renderTracksMenu === 'function') {
+            renderTracksMenu();
+        }
+    }
+
+    // --- 3. UI 彈窗控制 ---
     const modal = document.getElementById('wptEditModal');
     const nameInput = document.getElementById('modalWptName');
     const eleInput = document.getElementById('modalWptEle');
@@ -3577,50 +3727,43 @@ window.handleWptEdit = function(existingIdx, lat, lon, ele, oldName, timeStr, or
     eleInput.value = (ele !== null && ele !== "---") ? ele : 0;
     modal.style.display = 'flex';
 
-    
     setTimeout(() => { 
         nameInput.focus();
         nameInput.select(); 
     }, 100);
 
-    
-    currentEditTask = { existingIdx, lat, lon, ele, oldName, timeStr, originalIdx, stackIdx, activeIdx };
+    // 封裝目前的編輯任務，使用當前的 activeIdx
+    currentEditTask = { 
+        existingIdx, lat, lon, ele, oldName, timeStr, originalIdx, 
+        stackIdx: activeIdx, 
+        activeIdx: activeIdx 
+    };
 
-    
     const closeModal = () => {
         modal.style.display = 'none';
         window.removeEventListener('keydown', handleEscKey); 
-        nameInput.onkeydown = null;
-        eleInput.onkeydown = null;
     };
 
-    
-    const handleEscKey = (e) => {
-        if (e.key === "Escape") {
-            closeModal();
-        }
-    };
+    const handleEscKey = (e) => { if (e.key === "Escape") closeModal(); };
     window.addEventListener('keydown', handleEscKey);
 
-    
-    const handleEnterKey = (e) => {
-        if (e.key === "Enter" || e.keyCode === 13) {
-            e.preventDefault();
-            confirmBtn.click();
-        }
-    };
-
-    
-    nameInput.onkeydown = handleEnterKey;
-    eleInput.onkeydown = handleEnterKey;
-
-    
     confirmBtn.onclick = function() {
         const finalName = nameInput.value.trim() || "未命名航點";
         const finalEle = eleInput.value;
 
-        
+        // 執行儲存動作
         processSave(finalName, finalEle);
+        
+        // 儲存後的 UI 連動
+        const currentTrack = window.allTracks[window.currentActiveIndex];
+        
+        // 如果是第一個航點，自動開啟顯示名稱開關
+        if (currentTrack && currentTrack.waypoints && currentTrack.waypoints.length === 1) {
+            window.showWptNameAlways = true;
+        }
+
+        if (typeof loadRoute === 'function') loadRoute(window.currentActiveIndex);
+        if (typeof renderWaypointsAndPeaks === 'function') renderWaypointsAndPeaks(currentTrack);
         
         closeModal(); 
     };
@@ -3629,26 +3772,14 @@ window.handleWptEdit = function(existingIdx, lat, lon, ele, oldName, timeStr, or
 
 function processSave(finalName, finalEle) {
     const { existingIdx, lat, lon, timeStr, originalIdx, stackIdx, activeIdx } = currentEditTask;
-    console.log("開始儲存航點...", { stackIdx, activeIdx, finalName });
 
-    
-    if (!multiGpxStack[stackIdx]) {
-        console.log("偵測到地圖全空，初始化「新規劃」物件...");
-        const newTrack = {
-            name: "純航點",
-            points: [],           
-            waypoints: [],
-            stats: { totalDistance: 0, totalElevation: 0 },
-            isCombined: false,
-            color: "#1a73e8"
+    // 1. 安全檢查：確保目標專案物件存在
+    if (!window.multiGpxStack[stackIdx]) {
+        // 若意外丟失，補回純航點結構，但不覆蓋現有 allTracks 名稱
+        window.multiGpxStack[stackIdx] = { 
+            name: "純航點", fileName: "純航點.gpx", trackPoints: [], waypoints: [], 
+            stats: { totalDistance: 0, totalElevation: 0 } 
         };
-        multiGpxStack[stackIdx] = newTrack;
-        
-        if (allTracks.length <= stackIdx) {
-            allTracks[stackIdx] = newTrack;
-        }
-        
-        window.currentActiveIndex = stackIdx; 
     }
 
     const formatToStandard = (dateInput) => {
@@ -3660,17 +3791,18 @@ function processSave(finalName, finalEle) {
 
     const getNowStr = () => formatToStandard(new Date());
 
+    // 2. 取得目標陣列並執行存入
+    let currentWpts = window.multiGpxStack[stackIdx].waypoints;
     let targetWpt;
-    const currentFile = multiGpxStack[stackIdx];
 
-    if (existingIdx !== null && existingIdx !== -1 && currentFile.waypoints[existingIdx]) {
-        currentFile.waypoints[existingIdx].name = finalName;
-        currentFile.waypoints[existingIdx].ele = parseFloat(finalEle);
-        targetWpt = currentFile.waypoints[existingIdx];
+    if (existingIdx !== null && existingIdx !== -1 && currentWpts[existingIdx]) {
+        // 編輯舊點
+        currentWpts[existingIdx].name = finalName;
+        currentWpts[existingIdx].ele = parseFloat(finalEle);
     } else {
+        // 新增點
         targetWpt = { 
-            lat, lon, name: finalName, isCustom: true, 
-            belongsToRoute: stackIdx, 
+            lat, lon, name: finalName, isCustom: true, belongsToRoute: activeIdx,
             time: new Date().toISOString(), 
             localTime: getNowStr(), 
             ele: parseFloat(finalEle) || 0
@@ -3681,59 +3813,78 @@ function processSave(finalName, finalEle) {
             targetWpt.time = formattedTime;
             targetWpt.localTime = formattedTime;
         }
-        currentFile.waypoints.push(targetWpt);
+        currentWpts.push(targetWpt);
     }
 
-    allTracks[stackIdx] = currentFile; 
+    // 3. 地圖標記渲染
+    if (existingIdx === null || existingIdx === -1) {
+        const marker = L.marker([lat, lon], { 
+            icon: (typeof wptIcon !== 'undefined' ? wptIcon : new L.Icon.Default()) 
+        }).addTo(map);
 
-    
-    
-    if (typeof trackLayers !== 'undefined' && trackLayers[stackIdx]) {
-        map.removeLayer(trackLayers[stackIdx]);
+        marker.bindTooltip(finalName, { 
+            permanent: true, direction: 'top', offset: [0, -10] 
+        });
+
+        // 依照全域開關顯示或隱藏名稱標籤
+        if (window.showWptNameAlways) marker.openTooltip();
+        else marker.closeTooltip();
+
+        marker.on('click', (e) => {
+            L.DomEvent.stopPropagation(e);
+            // 重新取得最新索引以防萬一
+            const latestIdx = currentWpts.length - 1;
+            showCustomPopup(existingIdx === -1 ? latestIdx : existingIdx, finalName, finalEle, lat, lon);
+        });
+
+        if (typeof wptMarkers !== 'undefined') wptMarkers.push(marker);
     }
 
+    // ✅ 核心修正：儲存後再次刷新左側清單，更新航點計數 (例如：專案名稱 (1))
+    if (typeof renderTracksMenu === 'function') {
+        renderTracksMenu();
+    }
+    
+    // UI 表格與清單更新
     try {
-        if (typeof renderFileList === 'function') renderFileList(); 
-        if (typeof updateWptTable === 'function') updateWptTable(); 
-    } catch (e) { console.error("UI 渲染錯誤:", e); }
+        if (typeof updateWptTable === 'function') updateWptTable();
+    } catch (e) {}
 
-    
-    if (typeof loadRoute === 'function') {
-        loadRoute(stackIdx); 
-    }
-    
-    
-    
+    // --- 地圖焦點與高度表同步 (延遲處理以確保地圖層已就緒) ---
     setTimeout(() => { 
-        
-        if (typeof wptMarkers !== 'undefined' && wptMarkers.length === 0) {
-            const marker = L.marker([lat, lon], { 
-                icon: (typeof wptIcon !== 'undefined' ? wptIcon : new L.Icon.Default()) 
-            }).addTo(map);
-            marker.bindTooltip(finalName, { 
-                permanent: (typeof showWptNameAlways !== 'undefined' ? showWptNameAlways : false), 
-                direction: 'top', offset: [0, -10] 
-            });
-            marker.on('click', (e) => {
-                L.DomEvent.stopPropagation(e);
-                showCustomPopup(null, finalName, "wpt", lat, lon);
-            });
-            wptMarkers.push(marker);
-        }
-
-        
         map.eachLayer((layer) => {
-            
             if (layer instanceof L.CircleMarker && !(layer instanceof L.Marker)) {
-                
                 map.removeLayer(layer);
             }
         });
 
-        showCustomPopup(null, finalName, "wpt", lat, lon); 
-    }, 250); 
-}
+        window.activeFocusCircle = L.circleMarker([lat, lon], {
+            radius: 7, color: '#ffffff', weight: 2, fillColor: '#1a73e8', fillOpacity: 1, interactive: false 
+        }).addTo(map);
 
+        let targetIdx = parseInt(originalIdx);
+        if ((isNaN(targetIdx) || targetIdx === -1) && typeof trackPoints !== 'undefined') {
+            const minThreshold = 0.0005;
+            let minD = Infinity;
+            trackPoints.forEach((p, i) => {
+                const d = Math.abs(p.lat - lat) + Math.abs(p.lon - lon);
+                if (d < minD) { minD = d; targetIdx = i; }
+            });
+            if (minD > minThreshold) targetIdx = -1;
+        }
+
+        if (targetIdx !== -1 && !isNaN(targetIdx)) {
+            const progressBar = document.getElementById('gpxProgressBar');
+            if (progressBar) {
+                progressBar.value = targetIdx;
+                progressBar.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        }
+        
+        // 顯示最後的彈窗
+        showCustomPopup(targetIdx, finalName, "wpt", lat, lon); 
+    }, 350);
+}
 
 window.deleteWaypoint = function(idx) {
     const modal = document.getElementById('deleteConfirmModal');
@@ -3797,74 +3948,82 @@ function executeDelete(idx) {
 window.downloadCounters = window.downloadCounters || {};
 
 window.exportGpx = function(index) {
-    const idx = (index !== undefined) ? index : (window.currentMultiIndex || 0);
-    const item = (typeof multiGpxStack !== 'undefined') ? multiGpxStack[idx] : null;
+    // 優先序：傳入參數 > 全域索引 > 下拉選單
     const routeSelect = document.getElementById("routeSelect");
-    let activeIdx = parseInt(routeSelect?.value) || 0;
-    let currentRoute = (typeof allTracks !== 'undefined') ? allTracks[activeIdx] : item;
+    let activeIdx = (index !== undefined) ? index : (parseInt(routeSelect?.value) || window.currentActiveIndex || 0);
+
+    let currentRoute = (window.allTracks && window.allTracks[activeIdx]) ? window.allTracks[activeIdx] : null;
+
+    // 備援檢查
+    if (!currentRoute && typeof multiGpxStack !== 'undefined') {
+        currentRoute = multiGpxStack[activeIdx];
+    }
 
     if (!currentRoute) return alert("找不到資料");
 
-    
     const toTwDate = (timeStr) => {
         if (!timeStr) return null;
         const d = new Date(timeStr);
         if (isNaN(d.getTime())) return timeStr.split('T')[0]; 
-        
         const twTime = new Date(d.getTime() + (8 * 60 * 60 * 1000));
         return twTime.toISOString().split('T')[0];
     };
 
-    const targetDate = currentRoute.points?.length > 0 ? toTwDate(currentRoute.points[0].time) : null;
+    // 取得軌跡參考日期
+    const pts = currentRoute.points || currentRoute.trackPoints || [];
+    const targetDate = pts.length > 0 ? toTwDate(pts[0].time) : null;
+
     const trackName = (currentRoute.name || "Exported_Route").replace(/[/\\?%*:|<>]/g, '-');
 
     let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="YCHiking" xmlns="http://www.topografix.com/GPX/1/1">\n  <metadata><name>${trackName}</name></metadata>`;
 
-    
+    // --- 軌跡段落匯出 ---
     let tracksToExport = currentRoute.isCombined ? allTracks.filter(t => !t.isCombined) : [currentRoute];
     tracksToExport.forEach(route => {
-        if (route.points?.length > 0) {
+        const routePts = route.points || route.trackPoints;
+        if (routePts && routePts.length > 0) {
             gpx += `\n  <trk><name>${route.name || "Track"}</name><trkseg>`;
-            route.points.forEach(p => {
+            routePts.forEach(p => {
                 gpx += `\n      <trkpt lat="${p.lat}" lon="${p.lon}"><ele>${p.ele || 0}</ele>${p.time ? `<time>${p.time}</time>` : ""}</trkpt>`;
             });
             gpx += `\n    </trkseg>\n  </trk>`;
         }
     });
 
-    
+    // --- 航點段落匯出 ✅ 修正邏輯 ---
     let finalWpts = [];
     const rawWpts = currentRoute.waypoints || [];
 
     rawWpts.forEach(w => {
         let shouldInclude = false;
-        
+        // 如果是合併軌跡，全部包含
         if (currentRoute.isCombined) {
             shouldInclude = true;
-        } else {
-            
+        } 
+        // ✅ 修正點：如果是純航點專案(無軌跡點)或是名稱為純航點，則包含所有點
+        else if (currentRoute.name === "純航點" || pts.length === 0 || !targetDate) {
+            shouldInclude = true;
+        } 
+        else {
+            // 一般軌跡：包含自定義點，或與軌跡同日期的點
             if (w.isCustom || w.belongsToRoute !== undefined) {
                 if (w.belongsToRoute === activeIdx) shouldInclude = true;
-            } 
-            
-            else {
+            } else {
                 const wptTwDate = toTwDate(w.time);
                 if (targetDate && wptTwDate === targetDate) shouldInclude = true;
                 else if (!w.time) shouldInclude = true; 
             }
         }
-
         if (shouldInclude) finalWpts.push(w);
     });
 
-    
     finalWpts.forEach(w => {
         gpx += `\n  <wpt lat="${w.lat}" lon="${w.lon}">\n    <ele>${w.ele || 0}</ele>\n    <name>${w.name || "未命名"}</name>${w.time ? `\n    <time>${w.time}</time>` : ""}\n  </wpt>`;
     });
 
     gpx += `\n</gpx>`;
 
-    
+    // 下載執行
     const blob = new Blob(["\ufeff" + gpx], { type: 'application/gpx+xml;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -3873,8 +4032,6 @@ window.exportGpx = function(index) {
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
-
-    console.log(`[最終匯出] 模式: ${currentRoute.isCombined ? "結合版" : "單線"}, 基準日期: ${targetDate}, 匯出點數: ${finalWpts.length}`);
 };
 
 window.renameSubRoute = function(idx) {
@@ -4121,3 +4278,4 @@ searchConfirmBtn.onclick = performSearch;
 searchInput.onkeydown = function(e) {
     if (e.key === "Enter") performSearch();
 };
+
