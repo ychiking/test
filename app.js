@@ -3785,7 +3785,6 @@ window.handleWptEdit = function(existingIdx, lat, lon, ele, oldName, timeStr, or
 function processSave(finalName, finalEle) {
     const { existingIdx, lat, lon, timeStr, originalIdx, stackIdx, activeIdx } = currentEditTask;
 
-    
     const formatToStandard = (dateInput) => {
         const d = new Date(dateInput);
         if (isNaN(d.getTime())) return dateInput; 
@@ -3816,9 +3815,16 @@ function processSave(finalName, finalEle) {
         multiGpxStack[stackIdx].waypoints.push(targetWpt);
     }
 
-    allTracks.forEach(track => { track.waypoints = multiGpxStack[stackIdx].waypoints; });
+    // 確保 allTracks 至少有一個容器來同步資料，這在空地圖時尤為重要
+    if (allTracks.length === 0) {
+        allTracks.push(multiGpxStack[stackIdx]);
+    } else {
+        allTracks.forEach(track => { track.waypoints = multiGpxStack[stackIdx].waypoints; });
+    }
+
     try {
         if (typeof updateWptTable === 'function') updateWptTable();
+        // 渲染航點，這會讓新點納入 GPX 顯示邏輯
         if (typeof renderWaypointsAndPeaks === 'function') renderWaypointsAndPeaks(allTracks[activeIdx]);
     } catch (e) {}
 
@@ -3827,20 +3833,20 @@ function processSave(finalName, finalEle) {
             loadRoute(activeIdx); 
         }
     } else {
+        // 如果是新點，建立 Marker 並強制開啟 Tooltip
         const marker = L.marker([lat, lon], { 
             icon: (typeof wptIcon !== 'undefined' ? wptIcon : new L.Icon.Default()) 
         }).addTo(map);
 
+        // 強制 permanent 為 true 或根據您的全域設定，確保名稱顯示
         marker.bindTooltip(finalName, { 
-            permanent: (typeof showWptNameAlways !== 'undefined' ? showWptNameAlways : false), 
-            direction: 'top', offset: [0, -10] 
-        });
-
-        if (window.showWptNameAlways) marker.openTooltip();
+            permanent: false, 
+            direction: 'top', 
+            offset: [0, -10] 
+        }).openTooltip();
 
         marker.on('click', (e) => {
             L.DomEvent.stopPropagation(e);
-            
             showCustomPopup(originalIdx, finalName, finalEle, lat, lon);
         });
 
@@ -3849,9 +3855,7 @@ function processSave(finalName, finalEle) {
         }
     }
     
-    
     setTimeout(() => { 
-        
         map.eachLayer((layer) => {
             if (layer instanceof L.CircleMarker && !(layer instanceof L.Marker)) {
                 map.removeLayer(layer);
@@ -3862,10 +3866,8 @@ function processSave(finalName, finalEle) {
             radius: 7, color: '#ffffff', weight: 2, fillColor: '#1a73e8', fillOpacity: 1, interactive: false 
         }).addTo(map);
 
-        
         let targetIdx = parseInt(originalIdx);
 
-        
         if ((isNaN(targetIdx) || targetIdx === -1 || targetIdx === 999999) && typeof trackPoints !== 'undefined') {
             const minThreshold = 0.0005; 
             let minD = Infinity;
@@ -3879,27 +3881,26 @@ function processSave(finalName, finalEle) {
             
             if (minD > minThreshold) targetIdx = -1;
         }
-        
 
         if (targetIdx !== -1 && !isNaN(targetIdx)) {
             const progressBar = document.getElementById('gpxProgressBar');
             if (progressBar) {
                 progressBar.value = targetIdx;
-                
                 progressBar.dispatchEvent(new Event('input', { bubbles: true }));
             }
         }
 
-        
+        // 檢查是否需要補畫 Marker (針對極端空資料情況)
         if (typeof wptMarkers !== 'undefined' && wptMarkers.length === 0) {
             const marker = L.marker([lat, lon], { 
                 icon: (typeof wptIcon !== 'undefined' ? wptIcon : new L.Icon.Default()) 
             }).addTo(map);
             
             marker.bindTooltip(finalName, { 
-                permanent: (typeof showWptNameAlways !== 'undefined' ? showWptNameAlways : false), 
-                direction: 'top', offset: [0, -10] 
-            });
+                permanent: true, 
+                direction: 'top', 
+                offset: [0, -10] 
+            }).openTooltip();
 
             marker.on('click', (e) => {
                 L.DomEvent.stopPropagation(e);
@@ -3908,9 +3909,9 @@ function processSave(finalName, finalEle) {
             });
             wptMarkers.push(marker);
         }
-
         
         showCustomPopup(targetIdx, finalName, "wpt", lat, lon); 
+        renderRouteInfo();
         
     }, 350); 
 }
