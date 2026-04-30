@@ -3815,7 +3815,7 @@ function processSave(finalName, finalEle) {
         multiGpxStack[stackIdx].waypoints.push(targetWpt);
     }
 
-    // 確保 allTracks 至少有一個容器來同步資料，這在空地圖時尤為重要
+    // 確保 allTracks 與 stack 同步，讓它像一個純航點 GPX
     if (allTracks.length === 0) {
         allTracks.push(multiGpxStack[stackIdx]);
     } else {
@@ -3824,7 +3824,7 @@ function processSave(finalName, finalEle) {
 
     try {
         if (typeof updateWptTable === 'function') updateWptTable();
-        // 渲染航點，這會讓新點納入 GPX 顯示邏輯
+        // 呼叫渲染，但我們會在地圖物件上手動控制 tip
         if (typeof renderWaypointsAndPeaks === 'function') renderWaypointsAndPeaks(allTracks[activeIdx]);
     } catch (e) {}
 
@@ -3833,17 +3833,18 @@ function processSave(finalName, finalEle) {
             loadRoute(activeIdx); 
         }
     } else {
-        // 如果是新點，建立 Marker 並強制開啟 Tooltip
         const marker = L.marker([lat, lon], { 
             icon: (typeof wptIcon !== 'undefined' ? wptIcon : new L.Icon.Default()) 
         }).addTo(map);
 
-        // 強制 permanent 為 true 或根據您的全域設定，確保名稱顯示
+        // 修改重點：permanent 設為 false，這樣新增完不會直接顯示名字
         marker.bindTooltip(finalName, { 
             permanent: false, 
             direction: 'top', 
             offset: [0, -10] 
-        }).openTooltip();
+        });
+
+        // 也不要執行 marker.openTooltip();
 
         marker.on('click', (e) => {
             L.DomEvent.stopPropagation(e);
@@ -3878,7 +3879,6 @@ function processSave(finalName, finalEle) {
                     targetIdx = i;
                 }
             });
-            
             if (minD > minThreshold) targetIdx = -1;
         }
 
@@ -3890,17 +3890,17 @@ function processSave(finalName, finalEle) {
             }
         }
 
-        // 檢查是否需要補畫 Marker (針對極端空資料情況)
         if (typeof wptMarkers !== 'undefined' && wptMarkers.length === 0) {
             const marker = L.marker([lat, lon], { 
                 icon: (typeof wptIcon !== 'undefined' ? wptIcon : new L.Icon.Default()) 
             }).addTo(map);
             
+            // 同樣確保此處的 permanent 為 false
             marker.bindTooltip(finalName, { 
-                permanent: true, 
+                permanent: false, 
                 direction: 'top', 
                 offset: [0, -10] 
-            }).openTooltip();
+            });
 
             marker.on('click', (e) => {
                 L.DomEvent.stopPropagation(e);
@@ -3909,9 +3909,9 @@ function processSave(finalName, finalEle) {
             });
             wptMarkers.push(marker);
         }
-        
+
         showCustomPopup(targetIdx, finalName, "wpt", lat, lon); 
-        renderRouteInfo();
+        renderRouteInfo()
         
     }, 350); 
 }
