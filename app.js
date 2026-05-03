@@ -3378,10 +3378,7 @@ window.changeMapSize = function(size) {
 };
 
 
-window.addEventListener('resize', () => {
-    map.invalidateSize();
-    if (typeof window.updateVisibility === 'function') window.updateVisibility();
-});
+
 
 window.toggleFullScreen = function() {
     const mapDiv = document.getElementById('map');
@@ -3421,20 +3418,18 @@ window.manualShowBar = false;
 
 const mapSizeCtrl = L.control({ position: 'topleft' });
 
-mapSizeCtrl.onAdd = function() {
+mapSizeCtrl.onAdd = function(map) {
     const container = L.DomUtil.create('div', 'leaflet-control-group');
     container.style.display = 'flex';
     container.style.flexDirection = 'column';
     container.style.gap = '8px';
 
-    
     const sizeWrapper = L.DomUtil.create('div', 'leaflet-bar', container);
     sizeWrapper.style.backgroundColor = 'white';
     sizeWrapper.style.display = 'flex';
     sizeWrapper.style.flexDirection = 'column';
     sizeWrapper.style.border = '1px solid rgba(0,0,0,0.2)';
 
-    
     const renderButtons = () => {
         sizeWrapper.innerHTML = '';
         
@@ -3442,9 +3437,12 @@ mapSizeCtrl.onAdd = function() {
                            document.getElementById('map').classList.contains('iphone-fullscreen');
         const isNativeFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
         const isCurrentlyFull = isIphoneFS || isNativeFS;
+
+        if (!isCurrentlyFull && window.currentMapSize === 'full') {
+            window.currentMapSize = 'standard';
+        }
         const currentSize = window.currentMapSize || 'standard';
 
-        
         const iconStandard = '<span class="material-icons" style="font-size:20px; transform: rotate(45deg); display: block;">unfold_less</span>';
         const iconLarge = '<span class="material-icons" style="font-size:20px; transform: rotate(45deg); display: block;">unfold_more</span>';
         const iconExit = '<span class="material-icons" style="font-size:20px;">fullscreen_exit</span>';
@@ -3452,21 +3450,17 @@ mapSizeCtrl.onAdd = function() {
 
         let btnConfigs = [];
 
-        
         if (isCurrentlyFull) {
-            
             btnConfigs = [
                 { html: iconStandard, val: 'standard', label: '標準' },
                 { html: iconExit, val: 'large', label: '大圖' } 
             ];
         } else if (currentSize === 'standard') {
-            
             btnConfigs = [
                 { html: iconLarge, val: 'large', label: '大圖' },
                 { html: iconFull, val: 'full', label: '全螢幕' }
             ];
         } else if (currentSize === 'large') {
-            
             btnConfigs = [
                 { html: iconStandard, val: 'standard', label: '標準' },
                 { html: iconFull, val: 'full', label: '全螢幕' }
@@ -3500,7 +3494,6 @@ mapSizeCtrl.onAdd = function() {
                         window.changeMapSize(cfg.val);
                     }
                 }
-                
                 setTimeout(renderButtons, 500);
             });
         });
@@ -3508,7 +3501,6 @@ mapSizeCtrl.onAdd = function() {
 
     renderButtons();
 
-    
     const barBtnWrapper = L.DomUtil.create('div', 'leaflet-bar', container);
     barBtnWrapper.style.backgroundColor = 'white';
     barBtnWrapper.style.border = '1px solid rgba(0,0,0,0.2)';
@@ -3539,16 +3531,21 @@ mapSizeCtrl.onAdd = function() {
         if (window.updateVisibility) window.updateVisibility();
     });
 
-    
-    document.addEventListener('fullscreenchange', renderButtons);
-    document.addEventListener('webkitfullscreenchange', renderButtons);
+    const syncHandler = () => setTimeout(renderButtons, 200);
+    document.addEventListener('fullscreenchange', syncHandler);
+    document.addEventListener('webkitfullscreenchange', syncHandler);
 
     L.DomEvent.disableClickPropagation(container);
     return container;
 };
 
-mapSizeCtrl.addTo(map);
 
+
+mapSizeCtrl.addTo(map);
+window.addEventListener('resize', () => {
+    map.invalidateSize();
+    if (typeof window.updateVisibility === 'function') window.updateVisibility();
+});
 
 let gpxManagerControlContainer; 
 
